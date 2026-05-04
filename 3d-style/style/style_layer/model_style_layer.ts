@@ -54,7 +54,7 @@ class ModelStyleLayer extends StyleLayer {
         this._stats = {numRenderedVerticesInShadowPass: 0, numRenderedVerticesInTransparentPass: 0};
     }
 
-    createBucket(parameters: BucketParameters<ModelStyleLayer>): ModelBucket {
+    override createBucket(parameters: BucketParameters<this>): ModelBucket {
         return new ModelBucket(parameters);
     }
 

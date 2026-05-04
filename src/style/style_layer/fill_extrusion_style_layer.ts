@@ -41,7 +41,7 @@ class FillExtrusionStyleLayer extends StyleLayer {
         this._stats = {numRenderedVerticesInShadowPass: 0, numRenderedVerticesInTransparentPass: 0};
     }
 
-    createBucket(parameters: BucketParameters<FillExtrusionStyleLayer>): FillExtrusionBucket {
+    override createBucket(parameters: BucketParameters<this>): FillExtrusionBucket {
         return new FillExtrusionBucket(parameters);
     }
 

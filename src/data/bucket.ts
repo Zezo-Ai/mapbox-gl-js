@@ -4,6 +4,7 @@ import './feature_index';
 
 import type {CollisionBoxArray} from './array_types';
 import type Style from '../style/style';
+import type StyleLayer from '../style/style_layer';
 import type {TypedStyleLayer} from '../style/style_layer/typed_style_layer';
 import type FeatureIndex from './feature_index';
 import type Context from '../gl/context';
@@ -24,7 +25,7 @@ import type {StyleModelMap} from '../style/style_mode';
 import type {GlobalProperties} from '../style-spec/expression';
 import type ImageManager from '../render/image_manager';
 
-export type BucketParameters<Layer extends TypedStyleLayer> = {
+export type BucketParameters<Layer extends StyleLayer> = {
     index: number;
     layers: Array<Layer>;
     zoom: number;

@@ -10,7 +10,7 @@ import latest from '../style-spec/reference/latest';
 import assert from 'assert';
 import SymbolAppearance from './appearance';
 
-import type {Bucket} from '../data/bucket';
+import type {Bucket, BucketParameters} from '../data/bucket';
 import type Point from '@mapbox/point-geometry';
 import type {FeatureFilter, FilterExpression} from '../style-spec/feature_filter/index';
 import type {TransitionParameters, PropertyValue, ConfigOptions, Transitioning, Properties} from './properties';
@@ -368,6 +368,8 @@ class StyleLayer extends Evented {
     isTileClipped(): boolean {
         return false;
     }
+
+    createBucket?(parameters: BucketParameters<this>): Bucket;
 
     hasOffscreenPass(): boolean {
         return false;

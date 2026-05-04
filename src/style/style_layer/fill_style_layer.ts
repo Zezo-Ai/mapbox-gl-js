@@ -69,7 +69,7 @@ class FillStyleLayer extends StyleLayer {
         }
     }
 
-    createBucket(parameters: BucketParameters<FillStyleLayer>): FillBucket {
+    override createBucket(parameters: BucketParameters<this>): FillBucket {
         return new FillBucket(parameters);
     }
 

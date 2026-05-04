@@ -40,7 +40,7 @@ class BuildingStyleLayer extends StyleLayer {
         return prepareHD();
     }
 
-    createBucket(parameters: BucketParameters<BuildingStyleLayer>): BuildingBucket {
+    override createBucket(parameters: BucketParameters<this>): BuildingBucket {
         return new BuildingBucket(parameters);
     }
 

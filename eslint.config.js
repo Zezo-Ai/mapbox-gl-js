@@ -171,6 +171,7 @@ export default tseslint.config(
             }],
             '@typescript-eslint/no-non-null-assertion': 'error',
             '@typescript-eslint/no-misused-promises': 'error',
+            '@typescript-eslint/ban-ts-comment': ['error', {'ts-expect-error': true}],
             'prefer-object-has-own': 'error',
         }
     },
@@ -354,6 +355,7 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-return': 'off',
             '@typescript-eslint/no-floating-promises': 'off',
             '@typescript-eslint/no-implied-eval': 'off',
+            '@typescript-eslint/ban-ts-comment': ['error', {'ts-expect-error': 'allow-with-description'}],
             'e18e/prefer-static-regex': 'off',
         }
     },

@@ -28,8 +28,9 @@ import {RenderSourceType} from './tile';
 import type {VectorTile} from '@mapbox/vector-tile';
 import type {CanonicalTileID} from './tile_id';
 import type Projection from '../geo/projection/projection';
-import type {Bucket, PopulateParameters, ImageDependenciesMap} from '../data/bucket';
+import type {Bucket, PopulateParameters, ImageDependenciesMap, IndexedFeature} from '../data/bucket';
 import type Actor from '../util/actor';
+import type StyleLayer from '../style/style_layer';
 import type {TypedStyleLayer} from '../style/style_layer/typed_style_layer';
 import type StyleLayerIndex from '../style/style_layer_index';
 import type {StyleImageMap} from '../style/style_image';
@@ -196,7 +197,7 @@ class WorkerTile {
             }
 
             const sourceLayerIndex = sourceLayerCoder.encode(sourceLayerId);
-            const features = [];
+            const features: IndexedFeature[] = [];
 
             const localizable = this.localizableLayerIds && this.localizableLayerIds.has(sourceLayerId);
 
@@ -252,10 +253,9 @@ class WorkerTile {
                 recalculateLayers(family, this.zoom, options.brightness, availableImages, this.worldview, options.activeFloors);
 
                 const processBucket = () => {
-
-                    // @ts-expect-error - not all TypedStyleLayer subtypes have createBucket, but only bucket-producing layers reach here
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-                    const bucket: Bucket = buckets[layer.id] = layer.createBucket({
+                    const styleLayer: StyleLayer = layer;
+                    assert(styleLayer.createBucket);
+                    const bucket: Bucket = buckets[layer.id] = styleLayer.createBucket({
                         index: featureIndex.bucketLayerIDs.length,
                         layers: family,
                         zoom: this.zoom,
@@ -279,8 +279,6 @@ class WorkerTile {
 
                     assert(this.tileTransform.projection.name === this.projection.name);
                     featureIndex.bucketLayerIDs.push(family.map((l) => makeFQID(l.id, l.scope)));
-
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                     bucket.populate(features, options, this.tileID.canonical, this.tileTransform);
                 };
 

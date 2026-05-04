@@ -44,7 +44,7 @@ class CircleStyleLayer extends StyleLayer {
         super(layer, properties, scope, lut, options);
     }
 
-    createBucket(parameters: BucketParameters<CircleStyleLayer>): CircleBucket<CircleStyleLayer> {
+    override createBucket(parameters: BucketParameters<this>): CircleBucket<CircleStyleLayer> {
         return new CircleBucket(parameters);
     }
 
