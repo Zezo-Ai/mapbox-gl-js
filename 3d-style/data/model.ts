@@ -21,6 +21,7 @@ import type VertexBuffer from '../../src/gl/vertex_buffer';
 import type {TextureImage, TextureWrap, TextureFilter} from '../../src/render/texture';
 import type Transform from '../../src/geo/transform';
 import type {Footprint} from '../util/conflation';
+import type {ModelBVH} from '../source/model_bvh';
 
 export type Sampler = {
     minFilter: TextureFilter;
@@ -125,6 +126,8 @@ export type ModelNode = {
     globalMatrix: mat4;
     localMatrix: mat4;
     meshes: Array<Mesh>;
+    lodMeshes?: Array<Mesh>;
+    meshBVH?: ModelBVH;
     children: Array<ModelNode>;
     footprint: Footprint | null | undefined;
     lights: Array<AreaLight>;
@@ -432,6 +435,11 @@ export function uploadNode(node: ModelNode, context: Context, useSingleChannelOc
             uploadMesh(mesh, context, useSingleChannelOcclusionTexture);
         }
     }
+    if (node.lodMeshes) {
+        for (const mesh of node.lodMeshes) {
+            uploadMesh(mesh, context, useSingleChannelOcclusionTexture);
+        }
+    }
     if (node.children) {
         for (const child of node.children) {
             uploadNode(child, context, useSingleChannelOcclusionTexture);
@@ -439,17 +447,26 @@ export function uploadNode(node: ModelNode, context: Context, useSingleChannelOc
     }
 }
 
+function destroyMeshArrays(mesh: Mesh) {
+    mesh.indexArray.destroy();
+    mesh.vertexArray.destroy();
+    if (mesh.colorArray) mesh.colorArray.destroy();
+    if (mesh.normalArray) mesh.normalArray.destroy();
+    if (mesh.texcoordArray) mesh.texcoordArray.destroy();
+    if (mesh.featureArray) {
+        mesh.featureArray.destroy();
+    }
+}
+
 export function destroyNodeArrays(node: ModelNode) {
     if (node.meshes) {
         for (const mesh of node.meshes) {
-            mesh.indexArray.destroy();
-            mesh.vertexArray.destroy();
-            if (mesh.colorArray) mesh.colorArray.destroy();
-            if (mesh.normalArray) mesh.normalArray.destroy();
-            if (mesh.texcoordArray) mesh.texcoordArray.destroy();
-            if (mesh.featureArray) {
-                mesh.featureArray.destroy();
-            }
+            destroyMeshArrays(mesh);
+        }
+    }
+    if (node.lodMeshes) {
+        for (const mesh of node.lodMeshes) {
+            destroyMeshArrays(mesh);
         }
     }
     if (node.children) {
@@ -477,29 +494,37 @@ export function destroyTextures(material: Material) {
     }
 }
 
+function destroyMeshBuffers(mesh: Mesh) {
+    if (!mesh.vertexBuffer) return;
+    mesh.vertexBuffer.destroy();
+    mesh.indexBuffer.destroy();
+    if (mesh.normalBuffer) {
+        mesh.normalBuffer.destroy();
+    }
+    if (mesh.texcoordBuffer) {
+        mesh.texcoordBuffer.destroy();
+    }
+    if (mesh.colorBuffer) {
+        mesh.colorBuffer.destroy();
+    }
+    if (mesh.pbrBuffer) {
+        mesh.pbrBuffer.destroy();
+    }
+    mesh.segments.destroy();
+    if (mesh.material) {
+        destroyTextures(mesh.material);
+    }
+}
+
 export function destroyBuffers(node: ModelNode) {
     if (node.meshes) {
         for (const mesh of node.meshes) {
-            if (!mesh.vertexBuffer) continue;
-            mesh.vertexBuffer.destroy();
-            mesh.indexBuffer.destroy();
-            if (mesh.normalBuffer) {
-                mesh.normalBuffer.destroy();
-            }
-            if (mesh.texcoordBuffer) {
-                mesh.texcoordBuffer.destroy();
-            }
-            if (mesh.colorBuffer) {
-                mesh.colorBuffer.destroy();
-            }
-            if (mesh.pbrBuffer) {
-                mesh.pbrBuffer.destroy();
-            }
-
-            mesh.segments.destroy();
-            if (mesh.material) {
-                destroyTextures(mesh.material);
-            }
+            destroyMeshBuffers(mesh);
+        }
+    }
+    if (node.lodMeshes) {
+        for (const mesh of node.lodMeshes) {
+            destroyMeshBuffers(mesh);
         }
     }
     if (node.footprintDebugMesh) {

@@ -57,6 +57,7 @@ const fogMatrixScratch = new Float64Array(16);
 // Placeholder passed to modelUniformValues for u_normal_matrix in the instanced path;
 // it's either overwritten per instance or unused (shader reads from instance attributes).
 const instancedNormalMatrixPlaceholder = new Float32Array(16);
+const lodNodeCenterScratch: vec3 = [0, 0, 0];
 
 type ModelParameters = {
     zScaleMatrix: mat4;
@@ -1054,6 +1055,26 @@ function prepareBatched(painter: Painter, source: SourceCache, layer: ModelStyle
     }
 }
 
+function updateModelLod(nodeInfo: Tiled3dModelFeature, distanceToCamera: number, dtMs: number, switchDistance: number) {
+    const node = nodeInfo.node;
+    if (node.lodMeshes && node.lodMeshes.length > 0) {
+        if (nodeInfo.targetLod < 0) {
+            // First time this node is LOD-evaluated: snap to the correct level
+            // instantly to avoid fading from a state the user never saw.
+            nodeInfo.targetLod = distanceToCamera > switchDistance ? 1.0 : 0.0;
+        } else {
+            const timePassed = dtMs / 1000.0; // milliseconds to seconds
+            if (distanceToCamera > switchDistance) {
+                nodeInfo.targetLod = Math.min(nodeInfo.targetLod + timePassed, 1.0);
+            } else {
+                nodeInfo.targetLod = Math.max(nodeInfo.targetLod - timePassed, 0.0);
+            }
+        }
+    } else {
+        nodeInfo.targetLod = 0;
+    }
+}
+
 function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelStyleLayer, coords: Array<OverscaledTileID>) {
     layer.resetLayerRenderingStats(painter);
     const context = painter.context;
@@ -1159,6 +1180,17 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                     // While it is possible to use arbitrary scale for landmarks, it is highly unlikely
                     // and frustum culling optimization could be skipped in that case.
                     continue;
+                }
+
+                if (!isShadowPass) {
+                    const min = nodeAabb.min, max = nodeAabb.max;
+                    lodNodeCenterScratch[0] = (min[0] + max[0]) * 0.5;
+                    lodNodeCenterScratch[1] = (min[1] + max[1]) * 0.5;
+                    lodNodeCenterScratch[2] = (min[2] + max[2]) * 0.5;
+                    const distanceToCamera = vec3.distance(cameraPos, lodNodeCenterScratch) * metersPerPixel;
+                    // Rendering can get paused and thus the LOD transition may stop. Therefore don't use the full time-step,
+                    // such that when rendering is resumed, the transition smoothly continues.
+                    updateModelLod(nodeInfo, distanceToCamera, Math.min(painter._debugParams.dt, 1000 / 30), painter._debugParams.lodSwitchDistance);
                 }
 
                 if (!isShadowPass && frontCutoffEnabled) {
@@ -1268,124 +1300,147 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                 const hasMapboxFeatures = modelTraits & ModelTraits.HasMapboxMeshFeatures;
                 const emissiveStrength = hasMapboxFeatures ? 0.0 : nodeInfo.evaluatedRMEA[0][2];
 
-                for (let i = 0; i < node.meshes.length; ++i) {
-                    const mesh = node.meshes[i];
-                    const isLight = i === node.lightMeshIndex;
-                    let worldViewProjection = sortedNode.wvpForNode;
-                    if (isLight) {
-                        if (!isLightBeamPass && !painter.terrain && painter.shadowRenderer) {
-                            if (painter.currentLayer < painter.firstLightBeamLayer) {
-                                painter.firstLightBeamLayer = painter.currentLayer;
+                const targetLod = nodeInfo.targetLod;
+                const hasLod = node.lodMeshes && node.lodMeshes.length > 0;
+                const inTransition = hasLod && targetLod > 0.0 && targetLod < 1.0;
+
+                if (isShadowPass && hasLod && Math.round(targetLod) === 1) {
+                    continue;
+                }
+
+                const passes = inTransition ? 2 : 1;
+                const useLodWhenNotTransitioning = hasLod && Math.round(targetLod) === 1;
+                for (let pass = 0; pass < passes; ++pass) {
+                    const isLodMeshes = inTransition ? pass === 1 : useLodWhenNotTransitioning;
+                    const meshes = isLodMeshes ? node.lodMeshes : node.meshes;
+                    const threshold = inTransition ? (isLodMeshes ? -targetLod : 1.0 - targetLod) : 1.0;
+                    for (let i = 0; i < meshes.length; ++i) {
+                        const mesh = meshes[i];
+                        // Light mesh only exists in the primary mesh array, not LOD meshes
+                        const isLight = !isLodMeshes && i === node.lightMeshIndex;
+                        let worldViewProjection = sortedNode.wvpForNode;
+                        if (isLight) {
+                            if (!isLightBeamPass && !painter.terrain && painter.shadowRenderer) {
+                                if (painter.currentLayer < painter.firstLightBeamLayer) {
+                                    painter.firstLightBeamLayer = painter.currentLayer;
+                                }
+                                continue;
                             }
+                            // Lights come in tilespace
+                            worldViewProjection = sortedNode.wvpForTile;
+                        } else if (isLightBeamPass) {
                             continue;
                         }
-                        // Lights come in tilespace
-                        worldViewProjection = sortedNode.wvpForTile;
-                    } else if (isLightBeamPass) {
-                        continue;
-                    }
 
-                    const programOptions: CreateProgramParams = {
-                        defines: []
-                    };
-                    const dynamicBuffers = [];
+                        const programOptions: CreateProgramParams = {
+                            defines: []
+                        };
+                        const dynamicBuffers = [];
 
-                    if (!isShadowPass && shadowRenderer) {
-                        shadowRenderer.useNormalOffset = !!mesh.normalBuffer;
-                    }
-
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                    setupMeshDraw((programOptions.defines as Array<string>), dynamicBuffers, mesh, painter, ignoreLut ? null : layer.lut);
-                    if (!hasMapboxFeatures) {
-                        programOptions.defines.push('DIFFUSE_SHADED');
-                    }
-
-                    if (singleCascade) {
-                        programOptions.defines.push('SHADOWS_SINGLE_CASCADE');
-                    }
-
-                    if (stats) {
-                        if (!isShadowPass) {
-                            stats.numRenderedVerticesInTransparentPass += mesh.vertexArray.length;
-                        } else {
-                            stats.numRenderedVerticesInShadowPass += mesh.vertexArray.length;
+                        if (!isShadowPass && shadowRenderer) {
+                            shadowRenderer.useNormalOffset = !!mesh.normalBuffer;
                         }
-                    }
 
-                    if (isShadowPass) {
-                        drawShadowCaster(mesh, sortedNode.nodeModelMatrix, painter, layer);
-                        continue;
-                    }
-
-                    let fogMatrix: mat4 | null = null;
-                    if (fog) {
-                        fogMatrix = fogMatrixForModel(fogMatrixScratch, sortedNode.nodeModelMatrix, painter.transform);
-
-                        if (tr.projection.name !== 'globe') {
-                            const min = mesh.aabb.min;
-                            const max = mesh.aabb.max;
-                            const [minOpacity, maxOpacity] = fog.getOpacityForBounds(fogMatrix, min[0], min[1], max[0], max[1]);
-                            programOptions.overrideFog = minOpacity >= FOG_OPACITY_THRESHOLD || maxOpacity >= FOG_OPACITY_THRESHOLD;
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                        setupMeshDraw((programOptions.defines as Array<string>), dynamicBuffers, mesh, painter, ignoreLut ? null : layer.lut);
+                        if (!hasMapboxFeatures) {
+                            programOptions.defines.push('DIFFUSE_SHADED');
                         }
-                    }
 
-                    const material = mesh.material;
-                    let occlusionTextureTransform: [number, number, number, number] | undefined;
-                    // Handle Texture transform
-                    if (material.occlusionTexture && material.occlusionTexture.offsetScale) {
-                        occlusionTextureTransform = material.occlusionTexture.offsetScale;
-                        programOptions.defines.push('OCCLUSION_TEXTURE_TRANSFORM');
-                    }
+                        if (singleCascade) {
+                            programOptions.defines.push('SHADOWS_SINGLE_CASCADE');
+                        }
 
-                    const program = painter.getOrCreateProgram('model', programOptions);
+                        if (stats) {
+                            if (!isShadowPass) {
+                                stats.numRenderedVerticesInTransparentPass += mesh.vertexArray.length;
+                            } else {
+                                stats.numRenderedVerticesInShadowPass += mesh.vertexArray.length;
+                            }
+                        }
 
-                    if (!isShadowPass && shadowRenderer) {
-                        // The shadow matrix does not need to include node transforms,
-                        // as shadow_pos will be performing that transform in the shader
-                        shadowRenderer.setupShadowsFromMatrix(sortedNode.tileModelMatrix, program, shadowRenderer.useNormalOffset);
-                    }
+                        if (isShadowPass) {
+                            drawShadowCaster(mesh, sortedNode.nodeModelMatrix, painter, layer);
+                            continue;
+                        }
 
-                    painter.uploadCommonUniforms(context, program, null, fogMatrix);
+                        let fogMatrix: mat4 | null = null;
+                        if (fog) {
+                            fogMatrix = fogMatrixForModel(fogMatrixScratch, sortedNode.nodeModelMatrix, painter.transform);
 
-                    const pbr = material.pbrMetallicRoughness;
-                    // These values were taken from the tilesets used for testing
-                    pbr.metallicFactor = 0.9;
-                    pbr.roughnessFactor = 0.5;
+                            if (tr.projection.name !== 'globe') {
+                                const min = mesh.aabb.min;
+                                const max = mesh.aabb.max;
+                                const [minOpacity, maxOpacity] = fog.getOpacityForBounds(fogMatrix, min[0], min[1], max[0], max[1]);
+                                programOptions.overrideFog = minOpacity >= FOG_OPACITY_THRESHOLD || maxOpacity >= FOG_OPACITY_THRESHOLD;
+                            }
+                        }
 
-                    // Set emissive strength to zero for landmarks, as it is already used embedded in the PBR buffer.
-                    const uniformValues = modelUniformValues(
-                            worldViewProjection,
-                            lightingMatrixScratch,
-                            normalMatrixScratch,
-                            node.globalMatrix,
-                            painter,
-                            sortedNode.opacity,
-                            pbr.baseColorFactor,
-                            material.emissiveFactor,
-                            pbr.metallicFactor,
-                            pbr.roughnessFactor,
-                            material,
-                            emissiveStrength,
-                            layer,
-                            [0, 0, 0],
-                            occlusionTextureTransform
-                    );
+                        const material = mesh.material;
+                        let occlusionTextureTransform: [number, number, number, number] | undefined;
+                        // Handle Texture transform
+                        if (material.occlusionTexture && material.occlusionTexture.offsetScale) {
+                            occlusionTextureTransform = material.occlusionTexture.offsetScale;
+                            programOptions.defines.push('OCCLUSION_TEXTURE_TRANSFORM');
+                        }
 
-                    if (!isLight && (nodeInfo.hasTranslucentParts || sortedNode.opacity < 1.0)) {
+                        if (inTransition) {
+                            programOptions.defines.push('DITHERED_DISCARD');
+                        }
 
-                        program.draw(painter, context.gl.TRIANGLES, depthModeRW, StencilMode.disabled, ColorMode.disabled, CullFaceMode.backCCW,
+                        const program = painter.getOrCreateProgram('model', programOptions);
+
+                        if (!isShadowPass && shadowRenderer) {
+                            // The shadow matrix does not need to include node transforms,
+                            // as shadow_pos will be performing that transform in the shader
+                            shadowRenderer.setupShadowsFromMatrix(sortedNode.tileModelMatrix, program, shadowRenderer.useNormalOffset);
+                        }
+
+                        painter.uploadCommonUniforms(context, program, null, fogMatrix);
+
+                        const pbr = material.pbrMetallicRoughness;
+                        // These values were taken from the tilesets used for testing
+                        pbr.metallicFactor = 0.9;
+                        pbr.roughnessFactor = 0.5;
+
+                        // Set emissive strength to zero for landmarks, as it is already used embedded in the PBR buffer.
+                        const uniformValues = modelUniformValues(
+                                worldViewProjection,
+                                lightingMatrixScratch,
+                                normalMatrixScratch,
+                                node.globalMatrix,
+                                painter,
+                                sortedNode.opacity,
+                                pbr.baseColorFactor,
+                                material.emissiveFactor,
+                                pbr.metallicFactor,
+                                pbr.roughnessFactor,
+                                material,
+                                emissiveStrength,
+                                layer,
+                                [0, 0, 0],
+                                occlusionTextureTransform,
+                                undefined,
+                                undefined,
+                                threshold
+                        );
+
+                        if (!isLight && (nodeInfo.hasTranslucentParts || sortedNode.opacity < 1.0)) {
+
+                            program.draw(painter, context.gl.TRIANGLES, depthModeRW, StencilMode.disabled, ColorMode.disabled, CullFaceMode.backCCW,
+                                uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
+                                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                                undefined, dynamicBuffers);
+                        }
+
+                        const meshNeedsBlending = isLight || sortedNode.opacity < 1.0 || nodeInfo.hasTranslucentParts;
+                        const colorMode = meshNeedsBlending ? ColorMode.alphaBlended : ColorMode.unblended;
+                        const depthMode = !isLight ? depthModeRW : depthModeRO;
+                        program.draw(painter, context.gl.TRIANGLES, depthMode, StencilMode.disabled, colorMode, CullFaceMode.backCCW,
                             uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
                             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                             undefined, dynamicBuffers);
                     }
-
-                    const meshNeedsBlending = isLight || sortedNode.opacity < 1.0 || nodeInfo.hasTranslucentParts;
-                    const colorMode = meshNeedsBlending ? ColorMode.alphaBlended : ColorMode.unblended;
-                    const depthMode = !isLight ? depthModeRW : depthModeRO;
-                    program.draw(painter, context.gl.TRIANGLES, depthMode, StencilMode.disabled, colorMode, CullFaceMode.backCCW,
-                        uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                        undefined, dynamicBuffers);
                 }
             }
         }

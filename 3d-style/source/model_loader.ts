@@ -15,6 +15,7 @@ import {GLTF_TO_ARRAY_TYPE, GLTF_COMPONENTS} from '../util/loaders';
 import {base64DecToArr} from '../../src/util/util';
 import TriangleGridIndex from '../../src/util/triangle_grid_index';
 import {HEIGHTMAP_DIM} from '../data/model';
+import {ModelBVH} from './model_bvh';
 
 import type {vec2} from 'gl-matrix';
 import type {Class} from '../../src/types/class';
@@ -273,6 +274,98 @@ function convertMeshes(gltf: GLTF, textures: Array<ModelTexture>): Array<Array<M
     return meshes;
 }
 
+function loadNodeBVH(gltf: GLTF, extData: Record<string, number>, meshIdx: number | undefined): ModelBVH | null {
+    const binAccIdx = extData['binaryAccessor'];
+    const posMinAccIdx = extData['positionMinAccessor'];
+    const posMaxAccIdx = extData['positionMaxAccessor'];
+    const idxAccIdx = extData['indexAccessor'];
+
+    if (!Number.isInteger(binAccIdx) || !Number.isInteger(posMinAccIdx) ||
+        !Number.isInteger(posMaxAccIdx) || !Number.isInteger(idxAccIdx)) return null;
+
+    const accessors = gltf.json.accessors;
+    if (binAccIdx >= accessors.length || posMinAccIdx >= accessors.length ||
+        posMaxAccIdx >= accessors.length || idxAccIdx >= accessors.length) return null;
+
+    const binAcc = accessors[binAccIdx];
+    const posMinAcc = accessors[posMinAccIdx];
+    const posMaxAcc = accessors[posMaxAccIdx];
+    const idxAcc = accessors[idxAccIdx];
+
+    if (binAcc.bufferView === undefined || posMinAcc.bufferView === undefined ||
+        posMaxAcc.bufferView === undefined || idxAcc.bufferView === undefined) return null;
+
+    const bv = gltf.json.bufferViews;
+    if (binAcc.bufferView >= bv.length || posMinAcc.bufferView >= bv.length ||
+        posMaxAcc.bufferView >= bv.length || idxAcc.bufferView >= bv.length) return null;
+
+    const binBV = bv[binAcc.bufferView];
+    const posMinBV = bv[posMinAcc.bufferView];
+    const posMaxBV = bv[posMaxAcc.bufferView];
+    const idxBV = bv[idxAcc.bufferView];
+
+    if (binBV.buffer >= gltf.buffers.length || posMinBV.buffer >= gltf.buffers.length ||
+        posMaxBV.buffer >= gltf.buffers.length || idxBV.buffer >= gltf.buffers.length) return null;
+
+    // Validate each accessor's [byteOffset, byteOffset + dataSize) lies within its buffer view.
+    const fits = (accByteOffset: number, dataSize: number, viewLen: number) => accByteOffset >= 0 && accByteOffset <= viewLen && dataSize <= viewLen - accByteOffset;
+
+    const binAccOffset = binAcc.byteOffset || 0;
+    const posMinAccOffset = posMinAcc.byteOffset || 0;
+    const posMaxAccOffset = posMaxAcc.byteOffset || 0;
+    const idxAccOffset = idxAcc.byteOffset || 0;
+
+    if (!fits(binAccOffset, 0, binBV.byteLength) ||
+        !fits(posMinAccOffset, posMinAcc.count * 3 * 4, posMinBV.byteLength) ||
+        !fits(posMaxAccOffset, posMaxAcc.count * 3 * 4, posMaxBV.byteLength) ||
+        !fits(idxAccOffset, idxAcc.count * 4, idxBV.byteLength)) return null;
+
+    const binData = new Uint8Array(gltf.buffers[binBV.buffer], (binBV.byteOffset || 0) + binAccOffset, binBV.byteLength - binAccOffset);
+
+    const posMinData = new Float32Array(gltf.buffers[posMinBV.buffer], (posMinBV.byteOffset || 0) + posMinAccOffset, posMinAcc.count * 3);
+
+    const posMaxData = new Float32Array(gltf.buffers[posMaxBV.buffer], (posMaxBV.byteOffset || 0) + posMaxAccOffset, posMaxAcc.count * 3);
+
+    const idxData = new Uint32Array(gltf.buffers[idxBV.buffer], (idxBV.byteOffset || 0) + idxAccOffset, idxAcc.count);
+
+    const bvh = new ModelBVH();
+    bvh.serializeFromGltf(binData, posMinData, posMaxData, idxData);
+
+    // Set vertex positions from the mesh's POSITION accessor
+    if (meshIdx !== undefined && gltf.json.meshes && gltf.json.meshes[meshIdx]) {
+        const primitive = gltf.json.meshes[meshIdx].primitives[0];
+        if (primitive && primitive.attributes.POSITION !== undefined &&
+            primitive.attributes.POSITION < accessors.length) {
+            const posAcc = accessors[primitive.attributes.POSITION];
+            if (posAcc.bufferView !== undefined && posAcc.bufferView < bv.length) {
+                const posBV = bv[posAcc.bufferView];
+                if (posBV.buffer < gltf.buffers.length) {
+                    const posAccOffset = posAcc.byteOffset || 0;
+                    const stride = posBV.byteStride ? posBV.byteStride / 4 : 3;
+                    const needed = posAcc.count * stride * 4;
+                    if (fits(posAccOffset, needed, posBV.byteLength)) {
+                        const byteOffset = (posBV.byteOffset || 0) + posAccOffset;
+                        if (stride === 3) {
+                            bvh.setVertices(new Float32Array(gltf.buffers[posBV.buffer], byteOffset, posAcc.count * 3));
+                        } else {
+                            const src = new Float32Array(gltf.buffers[posBV.buffer], byteOffset, posAcc.count * stride);
+                            const vertices = new Float32Array(posAcc.count * 3);
+                            for (let i = 0; i < posAcc.count; i++) {
+                                vertices[i * 3] = src[i * stride];
+                                vertices[i * 3 + 1] = src[i * stride + 1];
+                                vertices[i * 3 + 2] = src[i * stride + 2];
+                            }
+                            bvh.setVertices(vertices);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return bvh;
+}
+
 function convertNode(nodeDesc: GLTFNode, gltf: GLTF, meshes: Array<Array<Mesh>>): ModelNode {
     const {matrix, rotation, translation, scale, mesh, extras, children, name} = nodeDesc;
     const node = {} as ModelNode;
@@ -310,6 +403,20 @@ function convertNode(nodeDesc: GLTFNode, gltf: GLTF, meshes: Array<Array<Mesh>>)
             converted.push(convertNode(gltf.json.nodes[childNodeIdx], gltf, meshes));
         }
         node.children = converted;
+    }
+
+    if (nodeDesc.extensions && nodeDesc.extensions['mbx_bvh']) {
+        node.meshBVH = loadNodeBVH(gltf, nodeDesc.extensions['mbx_bvh'] as Record<string, number>, mesh);
+    }
+
+    // Propagate meshBVH from children if this node has none
+    if (!node.meshBVH && node.children) {
+        for (const child of node.children) {
+            if (child.meshBVH) {
+                node.meshBVH = child.meshBVH;
+                break;
+            }
+        }
     }
 
     return node;
@@ -527,16 +634,23 @@ function convertFootprints(convertedNodes: ModelNode[], sceneNodes: number[], mo
     }
 }
 
+function findScene(scenes: Array<{name?: string; nodes: number[]}>, name: string): number {
+    for (let i = 0; i < scenes.length; i++) {
+        if (scenes[i].name === name) return i;
+    }
+    return -1;
+}
+
 export default function convertModel(gltf: GLTF): Array<ModelNode> {
     const textures = convertTextures(gltf, gltf.images);
     const meshes = convertMeshes(gltf, textures);
 
     const {scenes, scene, nodes} = gltf.json;
 
-    // select the correct node hierarchy
-    const sceneNodes = scenes ?
-        scenes[scene || 0].nodes :
-        [...nodes.keys()];
+    // Find "Default Scene" by name; fall back to the GLTF default scene index
+    let sceneIndex = scenes ? findScene(scenes, "Default Scene") : -1;
+    if (sceneIndex < 0) sceneIndex = scene || 0;
+    const sceneNodes = scenes ? scenes[sceneIndex].nodes : [...nodes.keys()];
 
     const resultNodes: ModelNode[] = [];
     for (const nodeIdx of sceneNodes) {
@@ -544,14 +658,44 @@ export default function convertModel(gltf: GLTF): Array<ModelNode> {
     }
 
     convertFootprints(resultNodes, sceneNodes, gltf.json.nodes);
+
+    // Find "LOD" scene by name; match nodes to primary scene counterparts via extras.id
+    const lodSceneIndex = scenes ? findScene(scenes, "LOD") : -1;
+    if (lodSceneIndex >= 0) {
+        const lodSceneNodes = scenes[lodSceneIndex].nodes;
+        const lodNodeById: Map<string, ModelNode> = new Map();
+        for (const nodeIdx of lodSceneNodes) {
+            const lodNode = convertNode(nodes[nodeIdx], gltf, meshes);
+            if (lodNode.id) {
+                lodNodeById.set(lodNode.id, lodNode);
+            }
+        }
+        for (const node of resultNodes) {
+            if (node.id) {
+                const lodNode = lodNodeById.get(node.id);
+                if (lodNode && lodNode.meshes) {
+                    node.lodMeshes = lodNode.meshes;
+                    if (lodNode.meshBVH) {
+                        node.meshBVH = lodNode.meshBVH;
+                    }
+                }
+            }
+        }
+    }
+
     return resultNodes;
 }
 
 export function process3DTile(gltf: GLTF, zScale: number): Array<ModelNode> {
+    // If the tile uses the mbx_bvh extension, all nodes will have a BVH picking mesh
+    // so we can skip the expensive heightmap generation.
+    const hasBVH = gltf.json.extensionsUsed && gltf.json.extensionsUsed.includes('mbx_bvh');
     const nodes = convertModel(gltf);
     for (const node of nodes) {
-        for (const mesh of node.meshes) {
-            parseHeightmap(mesh);
+        if (!hasBVH) {
+            for (const mesh of node.meshes) {
+                parseHeightmap(mesh);
+            }
         }
         if (node.lights) {
             node.lightMeshIndex = node.meshes.length;

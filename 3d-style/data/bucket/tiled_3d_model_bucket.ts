@@ -36,6 +36,9 @@ import type {ImageId} from '../../../src/style-spec/expression/types/image_id';
 const lookup = new Float32Array(512 * 512);
 const passLookup = new Uint8Array(512 * 512);
 
+const heightQueryAabbMinScratch: [number, number, number] = [0, 0, 0];
+const heightQueryAabbMaxScratch: [number, number, number] = [0, 0, 0];
+
 function getNodeHeight(node: ModelNode): number {
     let height = 0;
     if (node.meshes) {
@@ -89,6 +92,7 @@ export class Tiled3dModelFeature {
     aabb: Aabb;
     emissionHeightBasedParams: Array<[number, number, number, number, number]>;
     cameraCollisionOpacity: number;
+    targetLod: number;
     state: FeatureState | null;
     constructor(node: ModelNode) {
         this.node = node;
@@ -105,6 +109,7 @@ export class Tiled3dModelFeature {
         this.evaluatedColor = [];
         this.emissionHeightBasedParams = [];
         this.cameraCollisionOpacity = 1;
+        this.targetLod = -1;
         // Needs to calculate geometry
         this.feature = {type: 'Point', id: node.id, geometry: [], properties: {'height': getNodeHeight(node)}};
         this.aabb = this._getLocalBounds();
@@ -263,6 +268,14 @@ class Tiled3dModelBucket implements Bucket {
             if (mesh.pbrBuffer) {
                 mesh.pbrBuffer.updateData(mesh.featureArray);
                 result = true;
+            }
+        }
+        if (node.lodMeshes) {
+            for (const mesh of node.lodMeshes) {
+                if (mesh.pbrBuffer) {
+                    mesh.pbrBuffer.updateData(mesh.featureArray);
+                    result = true;
+                }
             }
         }
         return result;
@@ -603,9 +616,7 @@ class Tiled3dModelBucket implements Bucket {
         hidden: boolean;
         verticalScale: number;
     } | null | undefined {
-        const candidates: number[] = [];
-
-        const tmpVertex = [0, 0, 0];
+        const tmpVertex: [number, number, number] = [0, 0, 0];
 
         const nodeInverse = mat4.identity([]);
 
@@ -617,12 +628,29 @@ class Tiled3dModelBucket implements Bucket {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             if (nodeInfo.node.hidden === true) return {height: Infinity, maxHeight: nodeInfo.feature.properties["height"], hidden: false, verticalScale: nodeInfo.evaluatedScale[2]};
 
-            assert(mesh.heightmap);
-
             mat4.invert(nodeInverse, nodeInfo.node.globalMatrix);
             tmpVertex[0] = x;
             tmpVertex[1] = y;
-            vec3.transformMat4(tmpVertex as [number, number, number], tmpVertex as [number, number, number], nodeInverse);
+            tmpVertex[2] = 0;
+            vec3.transformMat4(tmpVertex, tmpVertex, nodeInverse);
+
+            if (nodeInfo.node.meshBVH) {
+                const qx = tmpVertex[0];
+                const qy = tmpVertex[1];
+                heightQueryAabbMinScratch[0] = qx - 1;
+                heightQueryAabbMinScratch[1] = qy - 1;
+                heightQueryAabbMinScratch[2] = -1000;
+                heightQueryAabbMaxScratch[0] = qx + 1;
+                heightQueryAabbMaxScratch[1] = qy + 1;
+                heightQueryAabbMaxScratch[2] = 1000;
+                const height = nodeInfo.node.meshBVH.findHighestPoint(heightQueryAabbMinScratch, heightQueryAabbMaxScratch);
+                if (height !== null) {
+                    return {height, maxHeight: nodeInfo.feature.properties["height"] as number, hidden: nodeInfo.hiddenByReplacement, verticalScale: nodeInfo.evaluatedScale[2]};
+                }
+                continue;
+            }
+
+            assert(mesh.heightmap);
 
             const xCell = ((tmpVertex[0] - mesh.aabb.min[0]) / (mesh.aabb.max[0] - mesh.aabb.min[0]) * HEIGHTMAP_DIM) | 0;
             const yCell = ((tmpVertex[1] - mesh.aabb.min[1]) / (mesh.aabb.max[1] - mesh.aabb.min[1]) * HEIGHTMAP_DIM) | 0;
@@ -630,6 +658,7 @@ class Tiled3dModelBucket implements Bucket {
             const heightValue = mesh.heightmap[heightmapIndex];
             if (heightValue < 0 && nodeInfo.node.footprint) {
                 // unpopulated cell. If it is in the building footprint, return undefined height
+                const candidates: number[] = [];
                 nodeInfo.node.footprint.grid.query(new Point(x, y), new Point(x, y), candidates);
                 if (candidates.length > 0) {
                     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -662,11 +691,17 @@ function addPBRVertex(vertexArray: FeatureVertexArray, color: number, colorMix: 
     let r = ((color & 0xF000) | ((color & 0xF000) >> 4)) >> 8;
     let g = ((color & 0x0F00) | ((color & 0x0F00) >> 4)) >> 4;
     let b = (color & 0x00F0) | ((color & 0x00F0) >> 4);
+    const a = (color & 0x000F) | ((color & 0x000F) << 4);
     if (colorMix[3] > 0) {
         r = interpolate(r, 255 * colorMix[0], colorMix[3]);
         g = interpolate(g, 255 * colorMix[1], colorMix[3]);
         b = interpolate(b, 255 * colorMix[2], colorMix[3]);
     }
+
+    const aoFactor = a / 255.0;
+    r *= aoFactor;
+    g *= aoFactor;
+    b *= aoFactor;
 
     const a0 = (r << 8) | g;
     const a1 = (b << 8) | Math.floor(rmea[3] * 255);
@@ -744,6 +779,25 @@ function updateNodeFeatureVertices(nodeInfo: Tiled3dModelFeature, doorLightChang
         }
         mesh.featureArray._trim();
         i++;
+    }
+
+    // Process LOD meshes with the same feature vertex data (no lights in LOD)
+    if (node.lodMeshes) {
+        for (const mesh of node.lodMeshes) {
+            if (!mesh.featureData) continue;
+            mesh.featureArray = new FeatureVertexArray();
+            mesh.featureArray.reserve(mesh.featureData.length);
+            for (const feature of mesh.featureData) {
+                const featureColor = isV2Tile ? feature & 0xffff : (feature >> 16) & 0xffff;
+                const id = isV2Tile ? (feature >> 16) & 0xffff : feature & 0xffff;
+                const partId = (id & 0xf) < 8 ? (id & 0xf) : 0;
+                const rmea = nodeInfo.evaluatedRMEA[partId];
+                const evaluatedColor = nodeInfo.evaluatedColor[partId];
+                const emissionParams = nodeInfo.emissionHeightBasedParams[partId];
+                addPBRVertex(mesh.featureArray, featureColor, evaluatedColor, rmea, emissionParams, mesh.aabb.min[2], mesh.aabb.max[2], null);
+            }
+            mesh.featureArray._trim();
+        }
     }
 
 }

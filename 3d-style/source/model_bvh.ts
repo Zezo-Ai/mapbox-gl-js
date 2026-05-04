@@ -111,6 +111,9 @@ function triangleAABBIntersect(
     return true;
 }
 
+// Reused across findHighestPoint calls; calls are synchronous so a single shared array is safe.
+const findHighestPointStack: number[] = [];
+
 export class ModelBVH {
     _nodes: BvhNode[];
     _indices: Uint32Array;
@@ -173,7 +176,9 @@ export class ModelBVH {
         if (!this._nodes || this._nodes.length === 0) return null;
         if (!aabbOverlap(this._nodes[0].aabbMin, this._nodes[0].aabbMax, aabbMin, aabbMax)) return null;
 
-        const stack: number[] = [0];
+        const stack = findHighestPointStack;
+        stack.length = 0;
+        stack.push(0);
         let highest = -Infinity;
 
         while (stack.length > 0) {

@@ -42,9 +42,10 @@ export type ModelUniformsType = {
     ['u_aoIntensity']: Uniform1f;
     ['u_emissive_strength']: Uniform1f;
     ['u_occlusionTextureTransform']: Uniform4f;
+    ['u_dithered_discard_threshold']: Uniform1f;
 };
 
-export type ModelDefinesType = 'DIFFUSE_SHADED' | 'SHADOWS_SINGLE_CASCADE' | 'OCCLUSION_TEXTURE_TRANSFORM';
+export type ModelDefinesType = 'DIFFUSE_SHADED' | 'SHADOWS_SINGLE_CASCADE' | 'OCCLUSION_TEXTURE_TRANSFORM' | 'DITHERED_DISCARD';
 
 const modelUniforms = (context: Context): ModelUniformsType => ({
     'u_matrix': new UniformMatrix4f(context),
@@ -72,8 +73,8 @@ const modelUniforms = (context: Context): ModelUniformsType => ({
     'u_color_mix': new Uniform4f(context),
     'u_aoIntensity': new Uniform1f(context),
     'u_emissive_strength': new Uniform1f(context),
-    'u_occlusionTextureTransform': new Uniform4f(context)
-
+    'u_occlusionTextureTransform': new Uniform4f(context),
+    'u_dithered_discard_threshold': new Uniform1f(context)
 });
 
 const emptyMat4 = new Float32Array(mat4.identity([]));
@@ -95,7 +96,8 @@ const modelUniformValues = (
     cameraPos: [number, number, number] = [0, 0, 0],
     occlusionTextureTransform?: [number, number, number, number] | null,
     materialOverride?: MaterialOverride | null,
-    modelColorMix?: [number, number, number, number]
+    modelColorMix?: [number, number, number, number],
+    ditheredDiscardThreshold: number = 1.0
 ): UniformValues<ModelUniformsType> => {
 
     const light = painter.style.light;
@@ -159,7 +161,8 @@ const modelUniformValues = (
         'u_color_mix': colorMix.toArray01(),
         'u_aoIntensity': aoIntensity,
         'u_emissive_strength': emissiveStrength,
-        'u_occlusionTextureTransform': occlusionTextureTransform ? occlusionTextureTransform : [0, 0, 0, 0] as [number, number, number, number]
+        'u_occlusionTextureTransform': occlusionTextureTransform ? occlusionTextureTransform : [0, 0, 0, 0] as [number, number, number, number],
+        'u_dithered_discard_threshold': ditheredDiscardThreshold
     };
 
     return uniformValues;

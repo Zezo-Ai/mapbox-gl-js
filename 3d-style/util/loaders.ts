@@ -158,6 +158,7 @@ export type GLTFNode = {
     extras: Record<string, unknown>;
     children: number[];
     name?: string;
+    extensions?: Record<string, unknown>;
 };
 
 export type GLTF = {
