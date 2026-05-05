@@ -94,9 +94,6 @@ void main() {
     float diluted_opacity = opacity * v_width2_dilute.z;
     float blur2 = (u_width_scale * blur + 1.0 / u_device_pixel_ratio) * v_gamma_scale;
     float alpha = clamp(min(dist - (v_width2_dilute.y - blur2), v_width2_dilute.x - dist) / blur2, 0.0, 1.0);
-#ifdef VARIABLE_LINE_WIDTH
-    alpha = mix(alpha, 1.0, stub_side);
-#endif
     alpha = side_z_offset > 0.0 ? 1.0 - alpha : alpha;
 
 #ifdef RENDER_LINE_DASH

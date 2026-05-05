@@ -249,10 +249,11 @@ void main() {
     float halfwidth;
     float dilute_scale = 1.0;
     float dilute_border_scale = 1.0;
+    float symmetric_outset = 0.0;
 #ifdef VARIABLE_LINE_WIDTH
     float left_width = a_z_offset_width.y;
     float right_width = a_z_offset_width.z;
-    halfwidth = (u_width_scale * (left ? left_width : right_width)) / 2.0;
+    halfwidth = u_width_scale * (left ? left_width : right_width) * 0.5;
 
     if (side_z_offset != 0.0) {
         // Lift the side of the line asymmetrically, based on the sign of side_z_offset
@@ -271,6 +272,7 @@ void main() {
     halfwidth = border_width > 0.0 ? border_width * u_width_scale * 0.5 : halfwidth;
 
     bool zero_right_width = border_width == 0.0 && right_width == 0.0;
+    symmetric_outset = zero_right_width ? u_width_scale * left_width * 0.5 : halfwidth;
 
     // If the right width is 0, we are rendering an asymmetric line with a stub side
     // We should disable antialiasing and blur on this side to be able to stich two lines together
@@ -446,6 +448,9 @@ void main() {
 #endif
 
     v_width2_dilute = vec4(outset, inset, dilute_scale, dilute_border_scale);
+#ifdef VARIABLE_LINE_WIDTH
+    v_width2_dilute.x = symmetric_outset;
+#endif
 
 #ifdef FOG
     v_fog_pos = fog_position(pos);
