@@ -290,11 +290,11 @@ export class Placement {
     buildingIndex: BuildingIndex | null | undefined;
     frontCutoffStart: number;
 
-    constructor(transform: Transform, fadeDuration: number, crossSourceCollisions: boolean, algorithm: PlacementAlgorithm, prevPlacement?: Placement, fogState?: FogState | null, buildingIndex?: BuildingIndex | null) {
+    constructor(transform: Transform, fadeDuration: number, crossSourceCollisions: boolean, algorithm: PlacementAlgorithm, prevPlacement?: Placement, fogState?: FogState | null, buildingIndex?: BuildingIndex | null, retiredCollisionDetector?: CollisionDetector | null) {
         this.transform = transform.clone();
         this.projection = transform.projection.name;
         this.algorithm = algorithm;
-        this.collisionIndex = this.algorithm.createCollisionDetector(this.transform, fogState);
+        this.collisionIndex = this.algorithm.createCollisionDetector(this.transform, fogState, retiredCollisionDetector);
         this.buildingIndex = buildingIndex;
         this.frontCutoffStart = 0;
         this.placements = {};

@@ -31,7 +31,11 @@ import type {PlacedCollisionBox, PlacedCollisionCircles} from '../collision_inde
 import type {Feature} from '../../style-spec/expression/index';
 
 export class DefaultPlacementAlgorithm implements PlacementAlgorithm {
-    createCollisionDetector(transform: Transform, fogState?: FogState | null): CollisionDetector {
+    createCollisionDetector(transform: Transform, fogState?: FogState | null, prevCollisionDetector?: CollisionDetector | null): CollisionDetector {
+        if (prevCollisionDetector instanceof CollisionIndex) {
+            prevCollisionDetector.reset(transform, fogState);
+            return prevCollisionDetector;
+        }
         return new CollisionIndex(transform, fogState);
     }
 

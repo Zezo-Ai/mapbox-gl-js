@@ -23,6 +23,7 @@ import type {SingleCollisionBox} from '../data/bucket/symbol_bucket';
 import type {GlyphOffsetArray, SymbolLineVertexArray, PlacedSymbol} from '../data/array_types';
 import type {FogState} from '../style/fog_helpers';
 import type {CollisionGroup} from '../symbol/placement';
+import type {CollisionDetector} from './placement_algorithm';
 
 export type PlacedCollisionBox = {
     box: Array<number>;
@@ -66,7 +67,7 @@ type CollisionKey = {bucketInstanceId: number; featureIndex: number; collisionGr
  *
  * @private
  */
-class CollisionIndex {
+class CollisionIndex implements CollisionDetector {
     grid: Grid<CollisionKey>;
     ignoredGrid: Grid<CollisionKey>;
     transform: Transform;
@@ -80,24 +81,33 @@ class CollisionIndex {
     // Used to exclude them from queryRenderedFeatures results.
     clippedSymbols: Map<number, Set<number>>;
 
-    constructor(
-        transform: Transform,
-        fogState?: FogState | null,
-        grid: Grid<CollisionKey> = new Grid<CollisionKey>(transform.width + 2 * viewportPadding, transform.height + 2 * viewportPadding, 25),
-        ignoredGrid: Grid<CollisionKey> = new Grid<CollisionKey>(transform.width + 2 * viewportPadding, transform.height + 2 * viewportPadding, 25)
-    ) {
+    constructor(transform: Transform, fogState?: FogState | null) {
+        this.gridRightBoundary = 0;
+        this.gridBottomBoundary = 0;
+        this.clippedSymbols = new Map();
+        this.reset(transform, fogState);
+    }
+
+    reset(transform: Transform, fogState?: FogState | null) {
+        const newWidth = transform.width + 2 * viewportPadding;
+        const newHeight = transform.height + 2 * viewportPadding;
+
+        if (newWidth !== this.gridRightBoundary || newHeight !== this.gridBottomBoundary) {
+            this.grid = new Grid<CollisionKey>(newWidth, newHeight, 25);
+            this.ignoredGrid = new Grid<CollisionKey>(newWidth, newHeight, 25);
+        } else {
+            this.grid.clear();
+            this.ignoredGrid.clear();
+        }
+
         this.transform = transform;
-
-        this.grid = grid;
-        this.ignoredGrid = ignoredGrid;
+        this.fogState = fogState;
         this.pitchfactor = Math.cos(transform._pitch) * transform.cameraToCenterDistance;
-
         this.screenRightBoundary = transform.width + viewportPadding;
         this.screenBottomBoundary = transform.height + viewportPadding;
-        this.gridRightBoundary = transform.width + 2 * viewportPadding;
-        this.gridBottomBoundary = transform.height + 2 * viewportPadding;
-        this.fogState = fogState;
-        this.clippedSymbols = new Map();
+        this.gridRightBoundary = newWidth;
+        this.gridBottomBoundary = newHeight;
+        this.clippedSymbols.clear();
     }
 
     clearClippedSymbolsForBucket(bucketInstanceId: number) {

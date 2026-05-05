@@ -88,11 +88,14 @@ export interface CollisionDetector {
 /// time-budget scheduling. Implementations are registered by name and selected
 /// via `MapOptions.placementAlgorithm`.
 export interface PlacementAlgorithm {
-    /// Called once per frame when PauseablePlacement.startNewPlacement() creates
-    /// a new Placement. Returns the CollisionDetector used for the entire frame.
+    // Called once per placement cycle when PauseablePlacement.startNewPlacement()
+    // creates a new Placement. `prevCollisionADetector` is the CollisionDetector
+    // from the previous cycle: implementations may reset and reuse it, like GL Native does,
+    // rather than allocating fresh
     createCollisionDetector: (
         transform: Transform,
         fogState?: FogState | null,
+        prevCollisionADetector?: CollisionDetector | null,
     ) => CollisionDetector;
 
     /// Core placement decision loop. Called per layer bucket part by

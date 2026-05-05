@@ -12,6 +12,7 @@ import type {BucketPart} from '../symbol/placement';
 import type {PlacementAlgorithmName} from '../symbol/placement_algorithms';
 import type {FogState} from './fog_helpers';
 import type BuildingIndex from '../source/building_index';
+import type {CollisionDetector} from '../symbol/placement_algorithm';
 
 class LayerPlacement {
     _sortAcrossTiles: boolean;
@@ -75,6 +76,7 @@ class PauseablePlacement {
     _showCollisionBoxes: boolean;
     _inProgressLayer: LayerPlacement | null | undefined;
     _fadeDuration: number;
+    _retiredCI: CollisionDetector | null = null;
 
     startNewPlacement(
         transform: Transform,
@@ -88,7 +90,8 @@ class PauseablePlacement {
         placementAlgorithmName?: PlacementAlgorithmName,
     ): PauseablePlacement {
         const algorithm = algorithms[placementAlgorithmName || 'default'];
-        this.placement = new Placement(transform, fadeDuration, crossSourceCollisions, algorithm, prevPlacement, fogState, buildingIndex);
+        this.placement = new Placement(transform, fadeDuration, crossSourceCollisions, algorithm, prevPlacement, fogState, buildingIndex, this._retiredCI);
+        this._retiredCI = null;
         this._currentPlacementIndex = order.length - 1;
         this._forceFullPlacement = false;
         this._showCollisionBoxes = showCollisionBoxes;
@@ -176,6 +179,7 @@ class PauseablePlacement {
     }
 
     commit(now: number): Placement {
+        this._retiredCI = this.placement.prevPlacement ? this.placement.prevPlacement.collisionIndex : null;
         this.placement.commit(now);
         return this.placement;
     }

@@ -109,6 +109,17 @@ class GridIndex<K = number> {
         return this.boxKeys.length + this.circleKeys.length;
     }
 
+    clear() {
+        for (const cell of this.boxCells) if (cell) (cell as Array<number>).length = 0;
+        for (const cell of this.circleCells) if (cell) (cell as Array<number>).length = 0;
+        (this.circleKeys as Array<K>).length = 0;
+        (this.boxKeys as Array<K>).length = 0;
+        (this.bboxes as Array<number>).length = 0;
+        (this.circles as Array<number>).length = 0;
+        this.boxUid = 0;
+        this.circleUid = 0;
+    }
+
     insert(key: K, x1: number, y1: number, x2: number, y2: number) {
         const uid = this.boxUid++;
         const cx1 = this._xCell(x1), cy1 = this._yCell(y1);
