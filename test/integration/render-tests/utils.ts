@@ -166,6 +166,7 @@ export async function renderMap(style, options, currentTestName) {
         },
         worldview: options.worldview,
         maxZoom: options.maxZoom,
+        placementAlgorithm: options.placementAlgorithm || 'default',
         transformRequest,
         testMode: true
     });
