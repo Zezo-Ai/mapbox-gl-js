@@ -2,7 +2,7 @@ import assert from 'assert';
 
 import type Point from '@mapbox/point-geometry';
 import type SourceCache from './source_cache';
-import type CollisionIndex from '../symbol/collision_index';
+import type {CollisionDetector} from '../symbol/placement_algorithm';
 import type Transform from '../geo/transform';
 import type {ImageId} from '../style-spec/expression/types/image_id';
 import type {default as Feature, TargetDescriptor, FeatureVariant} from '../util/vectortile_to_geojson';
@@ -143,7 +143,7 @@ export function queryRenderedSymbols(
     queryGeometry: Array<Point>,
     query: QrfQuery,
     availableImages: ImageId[],
-    collisionIndex: CollisionIndex,
+    collisionIndex: CollisionDetector,
     retainedQueryData: Record<number, RetainedQueryData>,
     worldview: string | undefined
 ): QueryResult {

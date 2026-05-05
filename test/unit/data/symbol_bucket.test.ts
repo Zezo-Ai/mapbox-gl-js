@@ -6,6 +6,7 @@ import {VectorTile} from '@mapbox/vector-tile';
 import {CollisionBoxArray} from '../../../src/data/array_types';
 import {performSymbolLayout, postRasterizationSymbolLayout, SymbolBucketConstants} from '../../../src/symbol/symbol_layout';
 import {Placement} from '../../../src/symbol/placement';
+import {DefaultPlacementAlgorithm} from '../../../src/symbol/placement_algorithms/default';
 import Transform from '../../../src/geo/transform';
 import {OverscaledTileID} from '../../../src/source/tile_id';
 import Tile from '../../../src/source/tile';
@@ -16,6 +17,7 @@ import {getProjection} from '../../../src/geo/projection/index';
 import vectorStub from '../../fixtures/mbsv5-6-18-23.vector.pbf?arraybuffer';
 import glyphData from '../../fixtures/fontstack-glyphs.json';
 
+import type CollisionIndex from '../../../src/symbol/collision_index';
 import type {BucketPart} from '../../../src/symbol/placement';
 
 // Load a point feature from fixture tile.
@@ -47,7 +49,7 @@ test('SymbolBucket', () => {
     const bucketB = bucketSetup();
     const projection = getProjection({name: 'mercator'});
     const options = {iconDependencies: {}, glyphDependencies: {}};
-    const placement = new Placement(transform, 0, true);
+    const placement = new Placement(transform, 0, true, new DefaultPlacementAlgorithm());
     const tileID = new OverscaledTileID(0, 0, 0, 0, 0);
     const crossTileSymbolIndex = new CrossTileSymbolIndex();
     const painter = {transform: {projection}};
@@ -82,14 +84,15 @@ test('SymbolBucket', () => {
             placement.placeLayerBucketPart(part, new Set(), false);
         }
     };
-    const a = placement.collisionIndex.grid.keysLength();
+    const ci = placement.collisionIndex as CollisionIndex;
+    const a = ci.grid.keysLength();
     place(bucketA.layers[0], tileA);
-    const b = placement.collisionIndex.grid.keysLength();
+    const b = ci.grid.keysLength();
     expect(a).not.toEqual(b);
 
-    const a2 = placement.collisionIndex.grid.keysLength();
+    const a2 = ci.grid.keysLength();
     place(bucketB.layers[0], tileB);
-    const b2 = placement.collisionIndex.grid.keysLength();
+    const b2 = ci.grid.keysLength();
     expect(b2).toEqual(a2);
 });
 

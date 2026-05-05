@@ -108,6 +108,7 @@ import type {CustomSourceInterface} from '../source/custom_source';
 import type {CanvasSourceSpecification} from '../source/canvas_source';
 import type {RasterQueryParameters, RasterQueryResult} from '../source/raster_array_tile_source';
 import type {IndoorTileOptions} from '../style/indoor_data';
+import type {PlacementAlgorithmName} from '../symbol/placement_algorithms';
 
 export type ControlPosition = 'top-left' | 'top' | 'top-right' | 'right' | 'bottom-right' | 'bottom' | 'bottom-left' | 'left';
 
@@ -211,6 +212,7 @@ export type MapOptions = {
     precompilePrograms?: boolean;
     repaint?: boolean;
     fadeDuration?: number;
+    placementAlgorithm?: PlacementAlgorithmName;
     localFontFamily?: string;
     localIdeographFontFamily?: string;
     fontstackCompositing?: FontstackCompositing;
@@ -492,6 +494,7 @@ export class Map extends Camera {
     _isInitialLoad: boolean;
     _shouldCheckAccess: boolean;
     _fadeDuration: number;
+    _placementAlgorithm: PlacementAlgorithmName;
     _crossSourceCollisions: boolean;
     _collectResourceTiming: boolean;
     _renderTaskQueue: TaskQueue;
@@ -632,6 +635,7 @@ export class Map extends Camera {
         this._bearingSnap = options.bearingSnap;
         this._refreshExpiredTiles = options.refreshExpiredTiles;
         this._fadeDuration = options.fadeDuration;
+        this._placementAlgorithm = options.placementAlgorithm || 'default';
         this._isInitialLoad = true;
         this._crossSourceCollisions = options.crossSourceCollisions;
         this._collectResourceTiming = options.collectResourceTiming;
@@ -4568,7 +4572,7 @@ export class Map extends Camera {
         }
 
         if (this.style) {
-            this._placementDirty = this.style._updatePlacement(this.painter.transform, this.showCollisionBoxes, fadeDuration, this._crossSourceCollisions, this.painter.replacementSource);
+            this._placementDirty = this.style._updatePlacement(this.painter.transform, this.showCollisionBoxes, fadeDuration, this._crossSourceCollisions, this.painter.replacementSource, this._placementAlgorithm);
         }
 
         // Actually draw

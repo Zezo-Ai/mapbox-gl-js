@@ -37,7 +37,7 @@ export type PlacedCollisionCircles = {
     occluded: boolean;
 };
 
-type ScreenAnchorPoint = {
+export type ScreenAnchorPoint = {
     occluded: boolean;
     perspectiveRatio: number;
     point: Point;

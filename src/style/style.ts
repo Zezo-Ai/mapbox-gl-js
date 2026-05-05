@@ -115,6 +115,7 @@ import type {vec3} from 'gl-matrix';
 import type {LightProps as Directional} from '../../3d-style/style/directional_light_properties';
 import type {LightProps as Ambient} from '../../3d-style/style/ambient_light_properties';
 import type {Placement} from '../symbol/placement';
+import type {PlacementAlgorithmName} from '../symbol/placement_algorithms';
 import type {Cancelable} from '../types/cancelable';
 import type {CustomLayerInterface} from './style_layer/custom_style_layer';
 import type {Validator, ValidationErrors} from './validate_style';
@@ -4239,6 +4240,7 @@ class Style extends Evented<MapEvents> {
         fadeDuration: number,
         crossSourceCollisions: boolean,
         replacementSource: ReplacementSource,
+        placementAlgorithmName?: PlacementAlgorithmName,
     ): boolean {
         if (!this.pauseablePlacement) {
             this.pauseablePlacement = new PauseablePlacement();
@@ -4285,7 +4287,7 @@ class Style extends Evented<MapEvents> {
 
         if (this.pauseablePlacement.isFullPlacementRequested() || !this.pauseablePlacement.placement || newImmediatePlacementRequired || newNormalPlacementRequired) {
             const fogState = this.fog && transform.projection.supportsFog ? this.fog.state : null;
-            this.pauseablePlacement = this.pauseablePlacement.startNewPlacement(transform, this._mergedOrder, showCollisionBoxes, fadeDuration, crossSourceCollisions, this.placement, fogState, this._buildingIndex);
+            this.pauseablePlacement = this.pauseablePlacement.startNewPlacement(transform, this._mergedOrder, showCollisionBoxes, fadeDuration, crossSourceCollisions, this.placement, fogState, this._buildingIndex, placementAlgorithmName);
             if (this.map.painter) {
                 const raw = this.map.painter.maxFrontCutoffRawStart;
                 if (raw > 0) {
