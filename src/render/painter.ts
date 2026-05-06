@@ -1946,9 +1946,7 @@ class Painter {
         return true;
     }
 
-    getBackgroundTiles(): {
-        [key: number]: Tile;
-        } {
+    getBackgroundTiles(): Record<number, Tile> {
         const oldTiles = this._backgroundTiles;
         const newTiles = this._backgroundTiles = {};
 

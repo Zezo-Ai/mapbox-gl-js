@@ -101,11 +101,14 @@ export class RetainedQueryData {
     bucketIndex: number;
     tileID: OverscaledTileID;
     featureSortOrder: Array<number> | null | undefined;
-    constructor(bucketInstanceId: number,
-                featureIndex: FeatureIndex,
-                sourceLayerIndex: number,
-                bucketIndex: number,
-                tileID: OverscaledTileID) {
+
+    constructor(
+        bucketInstanceId: number,
+        featureIndex: FeatureIndex,
+        sourceLayerIndex: number,
+        bucketIndex: number,
+        tileID: OverscaledTileID
+    ) {
         this.bucketInstanceId = bucketInstanceId;
         this.featureIndex = featureIndex;
         this.sourceLayerIndex = sourceLayerIndex;

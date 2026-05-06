@@ -75,10 +75,10 @@ export type Material = {
 };
 
 export type MaterialOverride = {
-        color: Color;
-        colorMix: number;
-        emissionStrength: number;
-        opacity: number;
+    color: Color;
+    colorMix: number;
+    emissionStrength: number;
+    opacity: number;
 };
 
 export type NodeOverride = {

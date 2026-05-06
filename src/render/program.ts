@@ -553,25 +553,24 @@ class Program<Us extends UniformBindings> {
     }
 
     draw<Us>(
-         painter: Painter,
-         drawMode: DrawMode,
-         depthMode: Readonly<DepthMode>,
-         stencilMode: Readonly<StencilMode>,
-         colorMode: Readonly<ColorMode>,
-         cullFaceMode: Readonly<CullFaceMode>,
-         uniformValues: UniformValues<Us>,
-         layerID: string,
-         layoutVertexBuffer: VertexBuffer,
-         indexBuffer: IndexBuffer | undefined,
-         segments: SegmentVector,
-         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-         currentProperties?: PossiblyEvaluated<any>,
-         zoom?: number,
-         configuration?: ProgramConfiguration,
-         dynamicLayoutBuffers?: Array<VertexBuffer | null | undefined>,
-         instanceCount?: number
+        painter: Painter,
+        drawMode: DrawMode,
+        depthMode: Readonly<DepthMode>,
+        stencilMode: Readonly<StencilMode>,
+        colorMode: Readonly<ColorMode>,
+        cullFaceMode: Readonly<CullFaceMode>,
+        uniformValues: UniformValues<Us>,
+        layerID: string,
+        layoutVertexBuffer: VertexBuffer,
+        indexBuffer: IndexBuffer | undefined,
+        segments: SegmentVector,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        currentProperties?: PossiblyEvaluated<any>,
+        zoom?: number,
+        configuration?: ProgramConfiguration,
+        dynamicLayoutBuffers?: Array<VertexBuffer | null | undefined>,
+        instanceCount?: number
     ) {
-
         const context = painter.context;
         const gl = context.gl;
 

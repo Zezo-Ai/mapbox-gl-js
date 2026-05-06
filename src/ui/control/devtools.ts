@@ -161,6 +161,7 @@ export class DevTools implements IControl {
         this._setupBuildings();
         this._setupOcclusion();
 
+        // eslint-disable-next-line mapbox/devtools-must-use-debug-run
         map.painter._devtools = this;
 
         // Tweakpane normalizes values internally (e.g., colors through 0-255 round-trip).
@@ -187,6 +188,7 @@ export class DevTools implements IControl {
     onRemove(): void {
         if (!this._map) return;
 
+        // eslint-disable-next-line mapbox/devtools-must-use-debug-run
         this._map.painter._devtools = undefined;
         this._map.off('render', this._onRender);
         this._container.removeEventListener('scrollend', this._onScrollEnd);

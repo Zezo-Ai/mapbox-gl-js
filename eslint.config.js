@@ -1,3 +1,5 @@
+/** @typedef {import('eslint').Linter.Config} EslintConfig */
+
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import e18e from '@e18e/eslint-plugin';
@@ -16,18 +18,43 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const gitignorePath = path.resolve(__dirname, '.gitignore');
 
+const STRICT_JSDOC_FILES = [
+    'src/index.ts',
+    'src/ui/**',
+    'src/source/**',
+    'src/geo/lng_lat.ts',
+    'src/geo/mercator_coordinate.ts',
+];
+
+const DEV_FILES = [
+    'test/**',
+    'build/**',
+    'internal/**',
+    'rollup.*',
+    'vitest.config.*',
+    'eslint.config.js',
+    'src/style-spec/test.js',
+    'src/style-spec/rollup.config.js',
+    'plugins/mapbox-gl-pmtiles-provider/rollup.config.ts',
+];
+
+const UNTYPED_FILES = [
+    './test/release/**/*',
+    './test/integration/**/*.js',
+    './test/build/style-spec.test.js',
+    './test/build/browserify-test-fixture.js',
+];
+
 export default tseslint.config(
     globalIgnores(tsConfig.exclude),
     includeIgnoreFile(gitignorePath),
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     ...config,
-    /** @type {import('eslint').Linter.Config} */ (e18e.configs.recommended),
+    /** @type {EslintConfig} */ (e18e.configs.recommended),
     tseslint.configs.recommendedTypeChecked,
     importX.flatConfigs.recommended,
-    jsdoc.configs['flat/recommended-typescript'],
 
-    // Settings
     {
         linterOptions: {
             reportUnusedDisableDirectives: 'error',
@@ -37,6 +64,16 @@ export default tseslint.config(
             parserOptions: {
                 projectService: true,
                 tsconfigRootDir: import.meta.dirname,
+            },
+        },
+
+        plugins: {
+            jsdoc,
+            mapbox: {
+                rules: {
+                    'devtools-must-use-debug-run': devtoolsMustUseDebugRun,
+                    'no-object-methods-on-collections': noObjectMethodsOnCollections,
+                },
             },
         },
 
@@ -59,61 +96,36 @@ export default tseslint.config(
                     var: 'var',
                 }
             },
-        }
+        },
     },
 
-    // Default rules
     {
         rules: {
+            // General
             'no-use-before-define': 'off',
-            'implicit-arrow-linebreak': 'off',
-            'arrow-parens': 'off',
             'arrow-body-style': 'off',
-            'no-confusing-arrow': 'off',
             'no-control-regex': 'off',
             'no-invalid-this': 'off',
             'no-prototype-builtins': 'off',
             'accessor-pairs': 'off',
             'require-atomic-updates': 'off',
-            'array-bracket-spacing': 'off',
             'consistent-return': 'off',
-            'global-require': 'off',
-            'import-x/no-commonjs': 'error',
-            'key-spacing': 'off',
-            'no-eq-null': 'off',
             'no-lonely-if': 'off',
             'no-new': 'off',
             'no-warning-comments': 'error',
             'dot-notation': 'off',
             'no-else-return': 'off',
             'no-lone-blocks': 'off',
-
             'no-mixed-operators': ['error', {
                 groups: [['&', '|', '^', '~', '<<', '>>', '>>>'], ['&&', '||']],
             }],
-
             'object-curly-spacing': ['error', 'never'],
-            'prefer-arrow-callback': 'error',
-
             'prefer-const': ['error', {
                 destructuring: 'all',
             }],
-
-            'prefer-template': 'error',
-            'quotes': 'off',
-            'space-before-function-paren': 'off',
             'template-curly-spacing': 'error',
             'no-useless-escape': 'off',
-
-            'indent': ['error', 4, {
-                flatTernaryExpressions: true,
-                CallExpression: {arguments: 'off'},
-                FunctionDeclaration: {parameters: 'off'},
-                FunctionExpression: {parameters: 'off'},
-            }],
-
             'no-multiple-empty-lines': ['error', {max: 1}],
-
             'no-restricted-syntax': ['error',
                 {
                     selector: 'ObjectExpression > SpreadElement',
@@ -141,28 +153,21 @@ export default tseslint.config(
                     message: 'importScripts is not allowed. Use dynamic import() instead.',
                 }
             ],
-
             'no-void': ['error', {allowAsStatement: true}],
-
             'no-restricted-globals': ['error', {
                 name: 'importScripts',
                 message: 'importScripts is not allowed. Use dynamic import() instead.',
             }],
-        }
-    },
+            'prefer-object-has-own': 'error',
 
-    // TypeScript specific rules
-    {
-        rules: {
+            // TypeScript
             '@typescript-eslint/unbound-method': 'off',
             '@typescript-eslint/only-throw-error': 'off',
             '@typescript-eslint/method-signature-style': 'error',
             '@typescript-eslint/consistent-type-exports': 'error',
             '@typescript-eslint/consistent-type-imports': 'error',
             '@typescript-eslint/no-redundant-type-constituents': 'off',
-            '@typescript-eslint/restrict-template-expressions': ['off', {
-                allowNever: true,
-            }],
+            '@typescript-eslint/restrict-template-expressions': 'off',
             'no-unused-vars': 'off',
             '@typescript-eslint/no-unused-vars': ['error', {
                 args: 'none',
@@ -172,37 +177,9 @@ export default tseslint.config(
             '@typescript-eslint/no-non-null-assertion': 'error',
             '@typescript-eslint/no-misused-promises': 'error',
             '@typescript-eslint/ban-ts-comment': ['error', {'ts-expect-error': true}],
-            'prefer-object-has-own': 'error',
-        }
-    },
 
-    // Custom rules
-    {
-        plugins: {
-            mapbox: {
-                rules: {
-                    'no-object-methods-on-collections': noObjectMethodsOnCollections,
-                    'devtools-must-use-debug-run': devtoolsMustUseDebugRun,
-                },
-            },
-        },
-        rules: {
-            'mapbox/no-object-methods-on-collections': 'error',
-        },
-    },
-
-    // Require _devtools access inside Debug.run()
-    {
-        files: ['src/**/*.ts', '3d-style/**/*.ts', 'modules/**/*.ts'],
-        ignores: ['src/ui/control/devtools.ts'],
-        rules: {
-            'mapbox/devtools-must-use-debug-run': 'error',
-        },
-    },
-
-    // Import plugin rules
-    {
-        rules: {
+            // Imports
+            'import-x/no-commonjs': 'error',
             'import-x/named': 'off',
             'import-x/namespace': 'off',
             'import-x/default': 'off',
@@ -211,7 +188,6 @@ export default tseslint.config(
             'import-x/no-named-as-default': 'off',
             'no-duplicate-imports': 'off',
             'import-x/no-duplicates': 'error',
-
             'import-x/order': ['error', {
                 groups: [[
                     'builtin',
@@ -223,89 +199,55 @@ export default tseslint.config(
                     'index',
                     'object',
                 ], 'type'],
-
                 'newlines-between': 'always',
             }],
-
             'import-x/no-restricted-paths': ['error', {
                 zones: [{
                     target: './src/style-spec',
-                    from: ['./src/!(style-spec)/**/*', './3d-style/**/*', './modules/**/*'],
+                    from: ['./src/!(style-spec)/**/*', './3d-style/**/*', './modules/**/*', './plugins/**/*'],
                 }],
             }],
-
             'import-x/extensions': ['error', {
                 ts: 'ignorePackages',
                 js: 'always',
                 json: 'always',
             }],
-        },
-    },
 
-    // e18e rules disabled for browser compatibility
-    {
-        rules: {
+            // e18e (disabled for browser compatibility)
             'e18e/prefer-spread-syntax': 'off',       // Object spread not allowed (affects some downstream bundlers)
             'e18e/prefer-nullish-coalescing': 'off',  // ?? not allowed (affects some downstream bundlers)
             'e18e/prefer-array-to-sorted': 'off',     // Not available until Safari 16
             'e18e/prefer-array-to-reversed': 'off',   // Not available until Safari 16
             'e18e/prefer-url-canparse': 'off',        // Not available until Safari 17
-        }
-    },
 
-    // Stylistic rules
-    {
-        rules: {
+            // Stylistic
             '@stylistic/no-confusing-arrow': ['error', {onlyOneSimpleParam: true}],
-
             '@stylistic/arrow-parens': 'off',
-            '@stylistic/indent': 'off',
+            '@stylistic/indent': ['error', 4, {
+                flatTernaryExpressions: true,
+                CallExpression: {arguments: 'off'},
+                FunctionDeclaration: {parameters: 'off'},
+            }],
             '@stylistic/quotes': 'off',
-
-            // Override operator-linebreak to allow | before line breaks for union types
             '@stylistic/operator-linebreak': ['error', 'after', {
                 overrides: {
-                    '|': 'before'
+                    '|': 'before' // allow `|` before line breaks for union types
                 }
             }],
-        }
-    },
 
-    // JSDoc specific rules
-    {
-        rules: {
-            'jsdoc/check-tag-names': ['warn', {
+            // JSDoc
+            'jsdoc/check-tag-names': ['error', {
                 'definedTags': ['section', 'experimental', 'note'],
             }],
 
-            // Disable JSDoc rules that are not relevant to public APIs.
-            'jsdoc/check-alignment': 'off',
-            'jsdoc/check-line-alignment': 'off',
-            'jsdoc/multiline-blocks': 'off',
-            'jsdoc/no-defaults': 'off',
-            'jsdoc/no-types': 'off',
-            'jsdoc/require-jsdoc': 'off',
-            'jsdoc/require-param-description': 'off',
-            'jsdoc/require-param': 'off',
-            'jsdoc/require-returns-check': 'off',
-            'jsdoc/require-returns-description': 'off',
-            'jsdoc/require-returns': 'off',
-            'jsdoc/tag-lines': 'off',
-            'jsdoc/reject-any-type': 'off',
-            'jsdoc/reject-function-type': 'off'
+            // Custom rules
+            'mapbox/devtools-must-use-debug-run': 'error',
+            'mapbox/no-object-methods-on-collections': 'error',
         }
     },
 
-    // JSDoc specific rules for public APIs
     {
-        files: [
-            'src/index.ts',
-            'src/ui/**',
-            'src/source/**',
-            'src/geo/lng_lat.ts',
-            'src/geo/mercator_coordinate.ts',
-        ],
-
+        files: STRICT_JSDOC_FILES,
         rules: {
             'jsdoc/check-access': 'error',
             'jsdoc/check-alignment': 'error',
@@ -335,20 +277,8 @@ export default tseslint.config(
         },
     },
 
-    // Disable `no-restricted-syntax` for test/, build/, and config files
     {
-        files: [
-            'test/**',
-            'build/**',
-            'internal/**',
-            'rollup.*',
-            'vitest.config.*',
-            'eslint.config.js',
-            'src/style-spec/test.js',
-            'src/style-spec/rollup.config.js',
-            'plugins/mapbox-gl-pmtiles-provider/rollup.config.ts',
-        ],
-
+        files: DEV_FILES,
         rules: {
             'no-restricted-syntax': 'off',
             '@typescript-eslint/no-explicit-any': 'off',
@@ -357,18 +287,15 @@ export default tseslint.config(
             '@typescript-eslint/no-implied-eval': 'off',
             '@typescript-eslint/ban-ts-comment': ['error', {'ts-expect-error': 'allow-with-description'}],
             'e18e/prefer-static-regex': 'off',
-        }
+            'mapbox/devtools-must-use-debug-run': 'off',
+        },
     },
 
-    // Disable type-aware linting for files that are not migrated to TypeScript
     {
-        files: [
-            './test/release/**/*',
-            './test/integration/**/*',
-            './test/build/style-spec.test.js',
-            './test/build/browserify-test-fixture.js'
-        ],
-
+        files: UNTYPED_FILES,
         extends: [tseslint.configs.disableTypeChecked],
+        rules: {
+            'mapbox/no-object-methods-on-collections': 'off',
+        },
     },
 );

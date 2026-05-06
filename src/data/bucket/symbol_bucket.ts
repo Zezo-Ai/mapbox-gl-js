@@ -544,9 +544,11 @@ class CollisionBuffers {
     collisionVertexArrayExt: CollisionVertexExtArray;
     collisionVertexBufferExt: VertexBuffer;
 
-    constructor(LayoutArray: Class<StructArray>,
-                layoutAttributes: Array<StructArrayMember>,
-                IndexArray: Class<TriangleIndexArray | LineIndexArray>) {
+    constructor(
+        LayoutArray: Class<StructArray>,
+        layoutAttributes: Array<StructArrayMember>,
+        IndexArray: Class<TriangleIndexArray | LineIndexArray>
+    ) {
         this.layoutVertexArray = new LayoutArray();
         this.layoutAttributes = layoutAttributes;
         this.indexArray = new IndexArray();
@@ -1746,24 +1748,26 @@ class SymbolBucket implements Bucket {
         };
     }
 
-    addSymbols(arrays: SymbolBuffers,
-               quads: Array<SymbolQuad>,
-               sizeVertex: number[],
-               lineOffset: [number, number],
-               alongLine: boolean,
-               feature: SymbolFeature,
-               writingMode: number | undefined,
-               globe: GlobeData | null | undefined,
-               tileAnchor: Anchor,
-               lineStartIndex: number,
-               lineLength: number,
-               associatedIconIndex: number,
-               availableImages: ImageId[],
-               canonical: CanonicalTileID,
-               brightness: number | null | undefined,
-               hasAnySecondaryIcon: boolean,
-               symbolInstanceIndex: number,
-               maxQuadCount: number) {
+    addSymbols(
+        arrays: SymbolBuffers,
+        quads: Array<SymbolQuad>,
+        sizeVertex: number[],
+        lineOffset: [number, number],
+        alongLine: boolean,
+        feature: SymbolFeature,
+        writingMode: number | undefined,
+        globe: GlobeData | null | undefined,
+        tileAnchor: Anchor,
+        lineStartIndex: number,
+        lineLength: number,
+        associatedIconIndex: number,
+        availableImages: ImageId[],
+        canonical: CanonicalTileID,
+        brightness: number | null | undefined,
+        hasAnySecondaryIcon: boolean,
+        symbolInstanceIndex: number,
+        maxQuadCount: number
+    ) {
         const indexArray = arrays.indexArray;
         const layoutVertexArray = arrays.layoutVertexArray;
         const globeExtVertexArray = arrays.globeExtVertexArray;

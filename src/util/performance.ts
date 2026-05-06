@@ -134,11 +134,13 @@ export const PerformanceUtils = {
     // Based on console.timeStamp()
     // Records timing measures to DevTools performance panel only
     // Low overhead, but not recorded on Chrome timeline.
-    measureLowOverhead(grpMask: number,
-                label: string,
-                  start?: string | number,
-                  end?: string | number,
-                  trackName?: string) {
+    measureLowOverhead(
+        grpMask: number,
+        label: string,
+        start?: string | number,
+        end?: string | number,
+        trackName?: string
+    ) {
         if ((grpMask & performanceUtilsGroupsMask) === 0) return;
         console.timeStamp(label, start, end !== undefined ? end : performance.now(), trackNameOrDefault());
     },

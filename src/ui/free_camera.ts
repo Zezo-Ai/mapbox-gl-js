@@ -224,10 +224,7 @@ class FreeCamera {
         }
     }
 
-    getPitchBearing(): {
-        pitch: number;
-        bearing: number;
-        } {
+    getPitchBearing(): {pitch: number; bearing: number} {
         const f = this.forward();
         const r = this.right();
 

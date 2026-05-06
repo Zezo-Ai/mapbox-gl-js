@@ -113,8 +113,8 @@ function tsObjectDeclaration(key, properties, overrides = {}) {
 
 function tsObject(properties, indent, overrides = {}) {
     return `{
-${// eslint-disable-next-line @typescript-eslint/no-unsafe-argument, indent
-Object.keys(properties)
+${// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    Object.keys(properties)
         .flatMap(k => {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             let property = `    ${indent}${tsProperty(k, properties[k], overrides[k])}`;
@@ -421,8 +421,8 @@ ${tsObjectDeclaration('SelectorPropertySpecification', spec.selectorProperty)}
 
 ${tsObjectDeclaration('AppearanceSpecification', spec.appearance)}
 
-${// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, indent
-spec.source.map(key => {
+${// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    spec.source.map(key => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const sourceSpecName = tsSourceSpecificationTypeName(key);
         if (sourceSpecName === 'GeoJSONSourceSpecification') {
@@ -436,15 +436,15 @@ spec.source.map(key => {
     }).join('\n\n')}
 
 export type SourceSpecification =
-${// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, indent
-spec.source.map(key => `    | ${tsSourceSpecificationTypeName(key)}`// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, indent
-).join('\n')};
+${// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    spec.source.map(key => `    | ${tsSourceSpecificationTypeName(key)}`// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    ).join('\n')};
 
 export type IconsetSpecification =
-${// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, indent
-spec.iconset.map(key => `    | ${// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, indent
-tsObject(spec[key], '    ')}`// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, indent
-).join('\n')};
+${// eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    spec.iconset.map(key => `    | ${// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        tsObject(spec[key], '    ')}`// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    ).join('\n')};
 
 export type ModelSpecification = ${tsType(spec.model)};
 

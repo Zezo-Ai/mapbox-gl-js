@@ -824,14 +824,12 @@ class Camera extends Evented<MapEvents> {
         return extendedAABB;
     }
 
-    /* eslint-disable jsdoc/valid-types */
     /**
      * @section {Querying features}
      * @method
      * @instance
      * @memberof Map
      */
-    /* eslint-enable jsdoc/valid-types */
 
     /**
      * Queries the currently loaded data for elevation at a geographical location. The elevation is returned in `meters` relative to mean sea-level.
