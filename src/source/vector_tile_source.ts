@@ -10,6 +10,7 @@ import {DedupedRequest, loadVectorTile} from './load_vector_tile';
 import {makeFQID} from '../util/fqid';
 import {isMapboxURL} from '../util/mapbox_url';
 import {resolveTileProvider, processTileJSON} from './tile_provider';
+import {HD, prepareHD} from '../../modules/hd_main';
 
 import type {ISource, SourceEvents, SourceVectorLayer} from './source';
 import type {OverscaledTileID} from './tile_id';
@@ -398,14 +399,39 @@ class VectorTileSource extends Evented<SourceEvents> implements ISource<'vector'
                 tile.resourceTiming = data.resourceTiming;
 
             if (this.map._refreshExpiredTiles && data) tile.setExpiryData(data);
-            tile.loadVectorData(data, this.map.painter);
-            cacheEntryPossiblyAdded(this.dispatcher);
 
-            callback(null, data);
+            // Tiles carrying HD extensions (elevated roads, etc.) can't be deserialized
+            // until the HD module is loaded on the main thread — unregistered classes
+            // throw on `deserializeBucket`. Gate the call on `HD.loaded` and await the
+            // module load if needed. Non-HD tiles bypass entirely.
+            if (data && data.containsHdExt && !HD.loaded) {
+                prepareHD().then(
+                    () => finishLoad.call(this),
+                    () => finishLoad.call(this),
+                );
+                return;
+            }
+            finishLoad.call(this);
 
-            if (tile.reloadCallback) {
-                this.loadTile(tile, tile.reloadCallback);
-                tile.reloadCallback = null;
+            function finishLoad(this: VectorTileSource) {
+                // Post-await abort check: the tile may have been cancelled while we were
+                // waiting for HD. Silent drop (callback(null)) matches the abort path above.
+                if (tile.aborted) return callback(null);
+                // If HD failed to load, `loadVectorData` would throw on the unregistered
+                // `hdExt` classes. Surface as a tile error rather than an uncaught throw.
+                if (data && data.containsHdExt && !HD.loaded) {
+                    return callback(new Error('HD module failed to load'));
+                }
+
+                tile.loadVectorData(data, this.map.painter);
+                cacheEntryPossiblyAdded(this.dispatcher);
+
+                callback(null, data);
+
+                if (tile.reloadCallback) {
+                    this.loadTile(tile, tile.reloadCallback);
+                    tile.reloadCallback = null;
+                }
             }
         }
     }

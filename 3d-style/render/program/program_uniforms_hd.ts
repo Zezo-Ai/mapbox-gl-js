@@ -1,4 +1,5 @@
 import {buildingUniforms, buildingBloomUniforms, buildingDepthUniforms} from './building_program';
+import {elevatedStructuresDepthUniforms, elevatedStructuresUniforms, elevatedStructuresDepthReconstructUniforms} from './elevated_structures_program';
 import {rasterParticleUniforms, rasterParticleTextureUniforms, rasterParticleDrawUniforms, rasterParticleUpdateUniforms} from '../../../src/render/program/raster_particle_program';
 import {snowUniforms} from '../../../src/precipitation/snow_program';
 import {rainUniforms} from "../../../src/precipitation/rain_program";
@@ -8,6 +9,9 @@ export const programUniforms = {
     building: buildingUniforms,
     buildingBloom: buildingBloomUniforms,
     buildingDepth: buildingDepthUniforms,
+    elevatedStructuresDepth: elevatedStructuresDepthUniforms,
+    elevatedStructures: elevatedStructuresUniforms,
+    elevatedStructuresDepthReconstruct: elevatedStructuresDepthReconstructUniforms,
     rasterParticle: rasterParticleUniforms,
     rasterParticleTexture: rasterParticleTextureUniforms,
     rasterParticleDraw: rasterParticleDrawUniforms,

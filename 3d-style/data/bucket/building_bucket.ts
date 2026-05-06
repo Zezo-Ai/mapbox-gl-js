@@ -295,6 +295,12 @@ export class BuildingGeometry {
 }
 
 export class BuildingBucket implements BucketWithGroundEffect {
+    // Signals to core's worker-side HD gate that any tile carrying this bucket class
+    // cannot be deserialized on main without the HD module loaded, because the class
+    // itself is defined and registered in the HD chunk. Checked via the class
+    // constructor so we don't need a statically-imported BuildingBucket reference.
+    static requiresHDRuntime = true;
+
     index: number;
     zoom: number;
     brightness: number | null | undefined;

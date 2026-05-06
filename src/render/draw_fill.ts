@@ -7,48 +7,37 @@ import {
     fillPatternUniformValues,
     fillOutlineUniformValues,
     fillOutlinePatternUniformValues,
-    elevatedStructuresDepthUniformValues,
-    elevatedStructuresUniformValues,
-    elevatedStructuresDepthReconstructUniformValues,
 } from './program/fill_program';
+import {HD} from '../../modules/hd_main';
 import StencilMode from '../gl/stencil_mode';
 import browser from '../util/browser';
-import assert from 'assert';
-import ColorMode from '../gl/color_mode';
-import {vec3} from 'gl-matrix';
-import EXTENT from '../style-spec/data/extent';
-import {altitudeFromMercatorZ} from '../geo/mercator_coordinate';
-import {easeIn} from '../util/util';
-import {OrthographicPitchTranstionValue} from '../geo/transform';
-import {number as lerp} from '../style-spec/util/interpolate';
 import {calculateGroundShadowFactor} from '../../3d-style/render/shadow_renderer';
 
+import type ColorMode from '../gl/color_mode';
 import type Painter from './painter';
 import type SourceCache from '../source/source_cache';
 import type FillStyleLayer from '../style/style_layer/fill_style_layer';
 import type FillBucket from '../data/bucket/fill_bucket';
-import type {OverscaledTileID, UnwrappedTileID} from '../source/tile_id';
+import type {OverscaledTileID} from '../source/tile_id';
 import type {DynamicDefinesType} from './program/program_uniforms';
 import type VertexBuffer from '../gl/vertex_buffer';
 import type {ElevationType} from '../../3d-style/elevation/elevation_constants';
-import type Transform from '../geo/transform';
-import type Program from './program';
 import type {DrawMode} from './program';
-import type {DepthPrePass} from './painter';
-import type MercatorCoordinate from '../geo/mercator_coordinate';
 import type {UniformValues} from './uniform_binding';
 import type SegmentVector from '../data/segment';
 import type IndexBuffer from '../gl/index_buffer';
-import type ProgramConfiguration from '../data/program_configuration';
+import type ElevatedFillBufferData from '../../3d-style/data/bucket/elevated_fill_buffer_data';
 import type {
     FillUniformsType,
     FillPatternUniformsType,
-    ElevatedStructuresDepthReconstructUniformsType,
 } from './program/fill_program';
 
 export default drawFill;
 
-interface DrawFillParams {
+// Exported so the HD-side render functions (drawElevatedStructures,
+// drawElevatedFillShadows) that live in 3d-style/render/draw_elevated_fill.ts can
+// accept the same params shape dispatched from `drawFill`.
+export interface DrawFillParams {
     painter: Painter;
     sourceCache: SourceCache;
     layer: FillStyleLayer;
@@ -92,8 +81,8 @@ function drawFill(painter: Painter, sourceCache: SourceCache, layer: FillStyleLa
     };
 
     if (painter.renderPass === 'shadow') {
-        if (painter.shadowRenderer && elevationType === 'road' && !terrainEnabled) {
-            drawShadows(drawFillParams);
+        if (painter.shadowRenderer && elevationType === 'road' && !terrainEnabled && HD.drawElevatedFillShadows) {
+            HD.drawElevatedFillShadows(drawFillParams);
         }
         return;
     }
@@ -112,235 +101,18 @@ function drawFill(painter: Painter, sourceCache: SourceCache, layer: FillStyleLa
     if (elevationType === 'road') {
         const roadElevationActive = !terrainEnabled && painter.renderPass === 'translucent';
 
-        if (roadElevationActive) {
+        if (roadElevationActive && HD.drawDepthPrepass) {
             // Render road geometries to the depth buffer in a separate step using a custom shader.
-            drawDepthPrepass(painter, sourceCache, layer, coords, 'geometry');
+            HD.drawDepthPrepass(painter, sourceCache, layer, coords, 'geometry');
         }
 
         // Draw elevated polygons
         drawFillTiles(drawFillParams, true, mrt, StencilMode.disabled);
 
-        if (roadElevationActive) {
-            drawElevatedStructures(drawFillParams);
+        if (roadElevationActive && HD.drawElevatedStructures) {
+            HD.drawElevatedStructures(drawFillParams);
         }
     }
-}
-
-function computeCameraPositionInTile(id: UnwrappedTileID, cameraMercPos: MercatorCoordinate): vec3 {
-    const tiles = 1 << id.canonical.z;
-
-    const x = (cameraMercPos.x * tiles - id.canonical.x - id.wrap * tiles) * EXTENT;
-    const y = (cameraMercPos.y * tiles - id.canonical.y) * EXTENT;
-    const z = altitudeFromMercatorZ(cameraMercPos.z, cameraMercPos.y);
-
-    return vec3.fromValues(x, y, z);
-}
-
-function computeDepthBias(tr: Transform): number {
-    let bias = 0.01;
-
-    if (tr.isOrthographic) {
-        const mixValue = tr.pitch >= OrthographicPitchTranstionValue ? 1.0 : tr.pitch / OrthographicPitchTranstionValue;
-        bias = lerp(0.0001, bias, easeIn(mixValue));
-    }
-
-    // The post-projection bias is originally computed for Metal, so we must compensate
-    // for different depth ranges between OpenGL and Metal ([-1, 1] and [0, 1] respectively)
-    return 2.0 * bias;
-}
-
-export function drawDepthPrepass(painter: Painter, sourceCache: SourceCache, layer: FillStyleLayer, coords: Array<OverscaledTileID>, pass: DepthPrePass) {
-    if (!layer.layout || layer.layout.get('fill-elevation-reference') === 'none' || layer.paint.get('fill-opacity').constantOr(1) === 0) return;
-
-    const gl = painter.context.gl;
-
-    assert(!(painter.terrain && painter.terrain.enabled));
-
-    // Perform a separate depth rendering pass for elevated road structues in order to:
-    //  1. Support rendering of underground polygons. Ground plane (z=0) has to be included
-    //     in the depth buffer for ground occlusion to work with tunnels
-    //  2. Support stacking of multiple elevatated layers which is necessary to avoid z-fighting
-    //
-    // The depth prepass for HD roads involves depth value reconstruction for affected pixels as
-    // the depth buffer might not contain valid occlusion especially for underground geometries
-    // prior to rendering. All layers contributing to the HD road network are gathered togther
-    // and used to construct the final depth information in few separate passes.
-
-    // Step 1 (Initialize): Render underground geometries by projecting them towards the camera to the ground level (z=0).
-    // Step 2 (Reset):      Carve "see-through" holes to the ground by lifting undergound polygons (excluding tunnels)
-    //                      to the ground plane (z=0) and setting depth value to maximum.
-    // Step 3 (Geometry):   Render road geometries to the depth buffer
-    const depthModeFor3D = new DepthMode(painter.context.gl.LEQUAL, DepthMode.ReadWrite, painter.depthRangeFor3D);
-    const depthModeReset = new DepthMode(painter.context.gl.GREATER, DepthMode.ReadWrite, painter.depthRangeFor3D);
-    const depthBias = computeDepthBias(painter.transform);
-    const cameraMercPos = painter.transform.getFreeCameraOptions().position;
-    const programName = 'elevatedStructuresDepthReconstruct';
-    const depthReconstructProgram = painter.getOrCreateProgram(programName, {defines: ['DEPTH_RECONSTRUCTION']});
-    const depthGeometryProgram = painter.getOrCreateProgram(programName);
-
-    for (const coord of coords) {
-        const tile = sourceCache.getTile(coord);
-        const bucket = tile.getBucket(layer) as FillBucket;
-        if (!bucket) continue;
-
-        const elevatedStructures = bucket.elevatedStructures;
-        if (!elevatedStructures || !elevatedStructures.depthSegments) {
-            continue;
-        }
-
-        const heightRange = bucket.elevationBufferData.heightRange;
-        const unwrappedTileID = coord.toUnwrapped();
-        const cameraTilePos = computeCameraPositionInTile(unwrappedTileID, cameraMercPos);
-        const tileMatrix = painter.translatePosMatrix(coord.projMatrix, tile,
-            layer.paint.get('fill-translate'), layer.paint.get('fill-translate-anchor'));
-
-        let uniformValues: UniformValues<ElevatedStructuresDepthReconstructUniformsType>;
-        let depthMode: DepthMode;
-        let segments: SegmentVector;
-        let program: Program<ElevatedStructuresDepthReconstructUniformsType>;
-
-        if (pass === 'initialize') {
-            // Depth reconstruction is required only for underground models. Use a slight margin
-            // to include surface models that might have some outlier vertices below the ground plane.
-            const heightMargin = 1.0;
-            if (!heightRange || heightRange.min >= heightMargin || elevatedStructures.depthSegments.segments[0].primitiveLength === 0) continue;
-            uniformValues = elevatedStructuresDepthReconstructUniformValues(tileMatrix, cameraTilePos, depthBias, 1.0, 0.0);
-            depthMode = depthModeFor3D;
-            segments = elevatedStructures.depthSegments;
-            program = depthReconstructProgram;
-        } else if (pass === 'reset') {
-            // Carve holes for underground polygons only
-            if (!heightRange || heightRange.min >= 0.0 || elevatedStructures.maskSegments.segments[0].primitiveLength === 0) continue;
-            uniformValues = elevatedStructuresDepthReconstructUniformValues(tileMatrix, cameraTilePos, 0.0, 0.0, 1.0);
-            depthMode = depthModeReset;
-            segments = elevatedStructures.maskSegments;
-            program = depthReconstructProgram;
-        } else if (pass === 'geometry') {
-            if (elevatedStructures.depthSegments.segments[0].primitiveLength === 0) continue;
-            uniformValues = elevatedStructuresDepthReconstructUniformValues(tileMatrix, cameraTilePos, depthBias, 1.0, 0.0);
-            depthMode = depthModeFor3D;
-            segments = elevatedStructures.depthSegments;
-            program = depthGeometryProgram;
-        }
-
-        assert(uniformValues && depthMode && segments && program);
-        assert(elevatedStructures.vertexBuffer && elevatedStructures.indexBuffer);
-
-        program.draw(painter, gl.TRIANGLES, depthMode,
-            StencilMode.disabled, ColorMode.disabled, CullFaceMode.disabled, uniformValues,
-            layer.id, elevatedStructures.vertexBuffer, elevatedStructures.indexBuffer, segments,
-            layer.paint, painter.transform.zoom);
-    }
-}
-
-export function drawGroundShadowMask(painter: Painter, sourceCache: SourceCache, layer: FillStyleLayer, coords: Array<OverscaledTileID>) {
-    if (!layer.layout || layer.layout.get('fill-elevation-reference') === 'none' || layer.paint.get('fill-opacity').constantOr(1) === 0) return;
-
-    assert(!(painter.terrain && painter.terrain.enabled));
-
-    const gl = painter.context.gl;
-    const depthMode = new DepthMode(gl.LEQUAL, DepthMode.ReadOnly, painter.depthRangeFor3D);
-    const stencilMode = new StencilMode({func: gl.ALWAYS, mask: 0xFF}, 0xFF, 0xFF, gl.KEEP, gl.KEEP, gl.REPLACE);
-    const cameraMercPos = painter.transform.getFreeCameraOptions().position;
-    const program = painter.getOrCreateProgram('elevatedStructuresDepthReconstruct');
-
-    for (const coord of coords) {
-        const tile = sourceCache.getTile(coord);
-        const bucket = tile.getBucket(layer) as FillBucket;
-        if (!bucket) continue;
-
-        const elevatedStructures = bucket.elevatedStructures;
-        if (!elevatedStructures || !elevatedStructures.depthSegments || elevatedStructures.depthSegments.segments[0].primitiveLength === 0) {
-            continue;
-        }
-
-        const unwrappedTileID = coord.toUnwrapped();
-        const cameraTilePos = computeCameraPositionInTile(unwrappedTileID, cameraMercPos);
-        const tileMatrix = painter.translatePosMatrix(coord.projMatrix, tile,
-            layer.paint.get('fill-translate'), layer.paint.get('fill-translate-anchor'));
-
-        const uniformValues = elevatedStructuresDepthReconstructUniformValues(tileMatrix, cameraTilePos, 0.0, 1.0, 0.0);
-        program.draw(painter, gl.TRIANGLES, depthMode,
-            stencilMode, ColorMode.disabled, CullFaceMode.disabled, uniformValues,
-            layer.id, elevatedStructures.vertexBuffer, elevatedStructures.indexBuffer, elevatedStructures.depthSegments,
-            layer.paint, painter.transform.zoom);
-    }
-}
-
-function drawElevatedStructures(params: DrawFillParams) {
-    const {painter, sourceCache, layer, coords, colorMode} = params;
-    const gl = painter.context.gl;
-
-    const programName = 'elevatedStructures';
-    const shadowRenderer = params.painter.shadowRenderer;
-    const renderWithShadows = !!shadowRenderer && shadowRenderer.enabled;
-    const depthMode = new DepthMode(painter.context.gl.LEQUAL, DepthMode.ReadOnly, painter.depthRangeFor3D);
-    let groundShadowFactor: [number, number, number] = [0, 0, 0];
-    if (renderWithShadows) {
-        const directionalLight = painter.style.directionalLight;
-        const ambientLight = painter.style.ambientLight;
-        if (directionalLight && ambientLight) {
-            groundShadowFactor = calculateGroundShadowFactor(painter.style, directionalLight, ambientLight);
-        }
-    }
-
-    const draw = (drawBridges: boolean) => {
-        for (const coord of coords) {
-            const tile = sourceCache.getTile(coord);
-            const bucket = tile.getBucket(layer) as FillBucket;
-            if (!bucket) continue;
-
-            const elevatedStructures = bucket.elevatedStructures;
-            if (!elevatedStructures) continue;
-
-            let renderableSegments: SegmentVector;
-            let programConfiguration: ProgramConfiguration;
-            if (drawBridges) {
-                renderableSegments = elevatedStructures.renderableBridgeSegments;
-                programConfiguration = elevatedStructures.bridgeProgramConfigurations.get(layer.id);
-            } else {
-                renderableSegments = elevatedStructures.renderableTunnelSegments;
-                programConfiguration = elevatedStructures.tunnelProgramConfigurations.get(layer.id);
-            }
-
-            if (!renderableSegments || renderableSegments.segments[0].primitiveLength === 0) continue;
-
-            assert(elevatedStructures.vertexBuffer && elevatedStructures.vertexBufferNormal && elevatedStructures.indexBuffer);
-
-            programConfiguration.updatePaintBuffers();
-
-            painter.prepareDrawTile();
-
-            const affectedByFog = painter.isTileAffectedByFog(coord);
-
-            const dynamicDefines: DynamicDefinesType[] = [];
-            if (renderWithShadows) {
-                dynamicDefines.push('RENDER_SHADOWS', 'NORMAL_OFFSET');
-            }
-            const program = painter.getOrCreateProgram(programName, {config: programConfiguration, overrideFog: affectedByFog, defines: dynamicDefines});
-
-            const tileMatrix = painter.translatePosMatrix(coord.projMatrix, tile,
-                layer.paint.get('fill-translate'), layer.paint.get('fill-translate-anchor'));
-
-            if (renderWithShadows) {
-                shadowRenderer.setupShadows(tile.tileID.toUnwrapped(), program, 'vector-tile');
-            }
-
-            const uniformValues = elevatedStructuresUniformValues(tileMatrix, groundShadowFactor);
-
-            painter.uploadCommonUniforms(painter.context, program, coord.toUnwrapped());
-
-            program.draw(painter, gl.TRIANGLES, depthMode,
-                StencilMode.disabled, colorMode, CullFaceMode.backCCW, uniformValues,
-                layer.id, elevatedStructures.vertexBuffer, elevatedStructures.indexBuffer, renderableSegments,
-                layer.paint, painter.transform.zoom, programConfiguration, [elevatedStructures.vertexBufferNormal]);
-        }
-    };
-
-    // Draw bridge structures
-    draw(true);
-    // Draw tunnel structures
-    draw(false);
 }
 
 function drawFillTiles(params: DrawFillParams, elevatedGeometry: boolean, multipleRenderTargets: boolean, stencilModeOverride?: StencilMode) {
@@ -395,8 +167,8 @@ function drawFillTiles(params: DrawFillParams, elevatedGeometry: boolean, multip
             const bucket = tile.getBucket(layer) as FillBucket;
             if (!bucket) continue;
 
-            const bufferData = elevatedGeometry ? bucket.elevationBufferData : bucket.bufferData;
-            if (bufferData.isEmpty()) continue;
+            const bufferData = elevatedGeometry ? (bucket.hdExt && bucket.hdExt.elevationBufferData) : bucket.bufferData;
+            if (!bufferData || bufferData.isEmpty()) continue;
 
             painter.prepareDrawTile();
 
@@ -407,7 +179,9 @@ function drawFillTiles(params: DrawFillParams, elevatedGeometry: boolean, multip
             const dynamicBuffers: VertexBuffer[] = [];
             if (renderElevatedRoads) {
                 dynamicDefines.push('ELEVATED_ROADS');
-                dynamicBuffers.push(bufferData.elevatedLayoutVertexBuffer);
+                // `renderElevatedRoads` implies the elevated path supplied us an
+                // `ElevatedFillBufferData`; cast to access its elevated vertex buffer.
+                dynamicBuffers.push((bufferData as ElevatedFillBufferData).elevatedLayoutVertexBuffer);
             }
             if (renderWithShadows) {
                 dynamicDefines.push('RENDER_SHADOWS', 'NORMAL_OFFSET');
@@ -504,48 +278,3 @@ function drawFillTiles(params: DrawFillParams, elevatedGeometry: boolean, multip
     }
 }
 
-function drawShadows(params: DrawFillParams) {
-    assert(!params.terrainEnabled);
-    assert(params.painter.renderPass === 'shadow');
-    assert(params.painter.shadowRenderer);
-
-    const {painter, sourceCache, layer, coords} = params;
-    const gl = painter.context.gl;
-
-    const shadowRenderer = params.painter.shadowRenderer;
-    const programName = 'elevatedStructuresDepth';
-
-    for (const coord of coords) {
-        const tile = sourceCache.getTile(coord);
-        const bucket = tile.getBucket(layer) as FillBucket;
-        if (!bucket) continue;
-
-        const elevatedStructures = bucket.elevatedStructures;
-        if (!elevatedStructures) {
-            continue;
-        }
-        if (!elevatedStructures.shadowCasterSegments || elevatedStructures.shadowCasterSegments.segments[0].primitiveLength === 0) {
-            continue;
-        }
-
-        assert(elevatedStructures.vertexBuffer && elevatedStructures.indexBuffer);
-
-        painter.prepareDrawTile();
-
-        const programConfiguration = bucket.bufferData.programConfigurations.get(layer.id);
-        const affectedByFog = painter.isTileAffectedByFog(coord);
-
-        const program = painter.getOrCreateProgram(programName, {config: programConfiguration, overrideFog: affectedByFog});
-
-        const tileMatrix = shadowRenderer.calculateShadowPassMatrixFromTile(tile.tileID.toUnwrapped());
-
-        painter.uploadCommonUniforms(painter.context, program, coord.toUnwrapped());
-
-        const uniformValues = elevatedStructuresDepthUniformValues(tileMatrix, 0.0);
-
-        program.draw(painter, gl.TRIANGLES, shadowRenderer.getShadowPassDepthMode(),
-            StencilMode.disabled, ColorMode.disabled, CullFaceMode.disabled, uniformValues, layer.id,
-            elevatedStructures.vertexBuffer, elevatedStructures.indexBuffer, elevatedStructures.shadowCasterSegments,
-            layer.paint, painter.transform.zoom, programConfiguration);
-    }
-}

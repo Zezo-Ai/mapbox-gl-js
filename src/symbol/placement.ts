@@ -514,8 +514,8 @@ export class Placement {
                 if (symbolBucket.elevationType === 'offset' && this.buildingIndex) {
                     this.buildingIndex.updateZOffset(symbolBucket, tile.tileID);
                 }
-                if (symbolBucket.elevationType === 'road') {
-                    symbolBucket.updateRoadElevation(tile.tileID.canonical);
+                if (symbolBucket.elevationType === 'road' && symbolBucket.hdExt) {
+                    symbolBucket.hdExt.updateRoadElevation(symbolBucket, tile.tileID.canonical);
                 }
                 symbolBucket.updateZOffset();
             }

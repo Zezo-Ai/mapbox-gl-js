@@ -18,9 +18,8 @@ import {PerformanceUtils, type PerformanceMark} from '../util/performance';
 import tileTransform from '../geo/projection/tile_transform';
 import {makeFQID} from "../util/fqid";
 import {type SpritePositions} from '../util/image';
-import {ElevationFeatures} from '../../3d-style/elevation/elevation_feature';
-import {HD_ELEVATION_SOURCE_LAYER, PROPERTY_ELEVATION_ID} from '../../3d-style/elevation/elevation_constants';
-import {ElevationPortalGraph} from '../../3d-style/elevation/elevation_graph';
+import {PROPERTY_ELEVATION_ID} from '../../3d-style/elevation/elevation_constants';
+import * as HD from '../../modules/hd_worker';
 import {ImageId} from '../style-spec/expression/types/image_id';
 import {parseActiveFloors} from '../render/indoor_parser';
 import {RenderSourceType} from './tile';
@@ -48,6 +47,22 @@ import type {StringifiedImageId} from '../style-spec/expression/types/image_id';
 import type {ImageVariant, StringifiedImageVariant} from '../style-spec/expression/types/image_variant';
 import type {StyleModelMap} from '../style/style_mode';
 import type {IndoorTileOptions} from '../style/indoor_data';
+
+// Check whether any bucket in a tile needs the HD module loaded on main before it can
+// be deserialized. Covers two cases:
+//   1. Fill/line/circle/symbol buckets carrying an `hdExt` — the extension class lives
+//      only in the HD module, so `deserialize` throws "unregistered class" without it.
+//   2. Buckets whose constructor advertises `requiresHDRuntime = true` — classes that
+//      live entirely in the HD chunk (e.g. `BuildingBucket`) and cannot be reconstructed
+//      on main without HD. Checked via a static on the constructor so core doesn't need
+//      to statically import the HD class.
+function anyBucketRequiresHD(buckets: Array<Bucket>): boolean {
+    for (const bucket of buckets) {
+        if ((bucket as {hdExt?: unknown}).hdExt != null) return true;
+        if ((bucket.constructor as {requiresHDRuntime?: boolean}).requiresHDRuntime) return true;
+    }
+    return false;
+}
 
 class WorkerTile {
     tileID: OverscaledTileID;
@@ -117,7 +132,56 @@ class WorkerTile {
         this.indoor = params.indoor;
     }
 
+    // Whether a layer would actually produce a bucket for this tile. Used to avoid
+    // doing work (HD module load, bucket creation) for layers that are hidden, out of
+    // zoom range, or irrelevant to this tile's render source type.
+    isLayerActiveForTile(layer: TypedStyleLayer): boolean {
+        if (this.renderSourceType === RenderSourceType.Symbol && layer.type !== 'symbol') return false;
+        if (this.renderSourceType === RenderSourceType.FillExtrusion && layer.type !== 'fill-extrusion') return false;
+        if (this.renderSourceType === RenderSourceType.Other && (layer.type === 'symbol' || layer.type === 'fill-extrusion')) return false;
+        if (layer.minzoom && this.zoom < Math.floor(layer.minzoom)) return false;
+        if (layer.maxzoom && this.zoom >= layer.maxzoom) return false;
+        if (layer.visibility === 'none') return false;
+        return true;
+    }
+
     parse(data: VectorTile, layerIndex: StyleLayerIndex, availableImages: ImageId[], availableModels: StyleModelMap, actor: Actor, callback: WorkerSourceVectorTileCallback) {
+        // Tile-level HD gate. If any layer in this tile's source may use HD and the HD
+        // module hasn't loaded yet on this worker, wait for it before parsing. Otherwise
+        // the bucket creation loop would skip `HD.attachExtension` and any features that
+        // rely on HD would render without elevation. Non-HD tiles bypass the gate
+        // entirely and stay fully synchronous.
+        const layerFamilies = layerIndex.familiesBySource[this.source];
+        if (layerFamilies && !HD.loaded) {
+            let needsHD = false;
+            for (const sourceLayerId in layerFamilies) {
+                for (const family of layerFamilies[sourceLayerId]) {
+                    const layer = family[0];
+                    // Layers that won't actually parse for this tile shouldn't force an
+                    // HD module load. The same predicate is applied inside `_parseAfterHD`.
+                    if (!this.isLayerActiveForTile(layer)) continue;
+                    if (layer.mayUseHD()) {
+                        needsHD = true;
+                        break;
+                    }
+                }
+                if (needsHD) break;
+            }
+            if (needsHD) {
+                // If HD fails to load, `_parseAfterHD`'s `if (HD.attachExtension)` guards
+                // skip augmentation — HD-flagged features parse without elevation and
+                // render flat. Matches the Buildings/Rain/Snow precedent: optional feature
+                // modules fail soft on the worker; the main thread may still fail loudly
+                // on deserialize if a tile already carries hdExt payloads.
+                const proceed = () => this._parseAfterHD(data, layerIndex, availableImages, availableModels, actor, callback);
+                HD.prepareHD().then(proceed, proceed);
+                return;
+            }
+        }
+        this._parseAfterHD(data, layerIndex, availableImages, availableModels, actor, callback);
+    }
+
+    _parseAfterHD(data: VectorTile, layerIndex: StyleLayerIndex, availableImages: ImageId[], availableModels: StyleModelMap, actor: Actor, callback: WorkerSourceVectorTileCallback) {
         const m = PerformanceUtils.beginMeasure('parseTile1');
         this.status = 'parsing';
         this.data = data;
@@ -230,8 +294,8 @@ class WorkerTile {
                 currentFeatureIndex++;
             }
 
-            if (elevationDependency && !options.elevationFeatures && Object.hasOwn(data.layers, HD_ELEVATION_SOURCE_LAYER)) {
-                options.elevationFeatures = ElevationFeatures.parseFrom(data.layers[HD_ELEVATION_SOURCE_LAYER], this.canonical);
+            if (elevationDependency && !options.elevationFeatures && HD.parseElevationFeatures) {
+                options.elevationFeatures = HD.parseElevationFeatures(data, this.canonical);
             }
 
             for (const family of layerFamilies[sourceLayerId]) {
@@ -242,21 +306,24 @@ class WorkerTile {
                     continue;
                 }
                 // Three-way render source type filtering:
-                if (this.renderSourceType === RenderSourceType.Symbol && layer.type !== 'symbol') continue;
-                if (this.renderSourceType === RenderSourceType.FillExtrusion && layer.type !== 'fill-extrusion') continue;
-                if (this.renderSourceType === RenderSourceType.Other && (layer.type === 'symbol' || layer.type === 'fill-extrusion')) continue;
                 assert(layer.source === this.source);
-                if (layer.minzoom && this.zoom < Math.floor(layer.minzoom)) continue;
-                if (layer.maxzoom && this.zoom >= layer.maxzoom) continue;
-                if (layer.visibility === 'none') continue;
+                if (!this.isLayerActiveForTile(layer)) continue;
 
                 recalculateLayers(family, this.zoom, options.brightness, availableImages, this.worldview, options.activeFloors);
+
+                // Assign bucket.index and register the layer-id mapping synchronously in
+                // style order. The async prepare() chain below can resolve out of order
+                // (HD layers add a microtask tick for the dynamic-import await), and
+                // queryRenderedFeatures / hit-testing rely on bucket.index reflecting the
+                // layer's position in the style.
+                const bucketIndex = featureIndex.bucketLayerIDs.length;
+                featureIndex.bucketLayerIDs.push(family.map((l) => makeFQID(l.id, l.scope)));
 
                 const processBucket = () => {
                     const styleLayer: StyleLayer = layer;
                     assert(styleLayer.createBucket);
                     const bucket: Bucket = buckets[layer.id] = styleLayer.createBucket({
-                        index: featureIndex.bucketLayerIDs.length,
+                        index: bucketIndex,
                         layers: family,
                         zoom: this.zoom,
                         lut: this.lut,
@@ -278,13 +345,22 @@ class WorkerTile {
                     });
 
                     assert(this.tileTransform.projection.name === this.projection.name);
-                    featureIndex.bucketLayerIDs.push(family.map((l) => makeFQID(l.id, l.scope)));
+
+                    // Attach HD extension when the layer declares HD elevation. Dispatching
+                    // through HD.attachExtension keeps the relevance check and the concrete
+                    // extension classes in the HD module — core stays unaware of which
+                    // bucket types are HD-augmentable.
+                    if (HD.attachExtension) HD.attachExtension(bucket);
+
                     bucket.populate(features, options, this.tileID.canonical, this.tileTransform);
                 };
 
-                if ('prepare' in layer) {
-                    const layerPromise = layer.prepare().then(() => processBucket());
-                    asyncBucketLoads.push(layerPromise);
+                // Only HD-relevant layers go through the async prepare() path; everything
+                // else stays fully synchronous so non-HD tiles pay no microtask overhead.
+                // For HD layers, `prepare()` returns the pending `prepareHD()` promise that
+                // must resolve before the bucket can populate safely.
+                if (layer.mayUseHD()) {
+                    asyncBucketLoads.push(layer.prepare().then(() => processBucket()));
                 } else {
                     processBucket();
                 }
@@ -311,8 +387,10 @@ class WorkerTile {
                 } else if (this.extraShadowCaster) {
                     const m = PerformanceUtils.beginMeasure('parseTile2');
                     this.status = 'done';
+                    const transferredBuckets = Object.values(buckets).filter(b => !b.isEmpty());
                     callback(null, {
-                        buckets: Object.values(buckets).filter(b => !b.isEmpty()),
+                        buckets: transferredBuckets,
+                        containsHdExt: anyBucketRequiresHD(transferredBuckets),
                         featureIndex,
                         collisionBoxArray: null,
                         hasTunnelGeometry,
@@ -383,8 +461,10 @@ class WorkerTile {
                 // If no images and no symbol layout, we can complete synchronously
                 if (!hasImages && !hasSymbolLayout) {
                     this.status = 'done';
+                    const transferredBuckets = Object.values(buckets).filter(b => !b.isEmpty());
                     callback(null, {
-                        buckets: Object.values(buckets).filter(b => !b.isEmpty()),
+                        buckets: transferredBuckets,
+                        containsHdExt: anyBucketRequiresHD(transferredBuckets),
                         featureIndex,
                         collisionBoxArray: this.collisionBoxArray,
                         hasTunnelGeometry,
@@ -414,8 +494,10 @@ class WorkerTile {
                     }
 
                     this.status = 'done';
+                    const transferredBuckets = Object.values(buckets).filter(b => !b.isEmpty());
                     callback(null, {
-                        buckets: Object.values(buckets).filter(b => !b.isEmpty()),
+                        buckets: transferredBuckets,
+                        containsHdExt: anyBucketRequiresHD(transferredBuckets),
                         featureIndex,
                         collisionBoxArray: this.collisionBoxArray,
                         hasTunnelGeometry,
@@ -509,34 +591,7 @@ class WorkerTile {
                 }
             }
 
-            if (options.elevationFeatures && options.elevationFeatures.length > 0) {
-                // Multiple layers might contribute to the elevation of this tile. For this reason we need to combine
-                // unevaluated portals from available buckets into single graph that describes polygon connectivity of the whole
-                // tile
-                const unevaluatedPortals = [];
-
-                for (const bucket of Object.values(buckets)) {
-                    if (bucket instanceof FillBucket) {
-                        const graph = bucket.getUnevaluatedPortalGraph();
-                        if (graph) {
-                            unevaluatedPortals.push(graph);
-                        }
-                    }
-                }
-
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                const evaluatedPortals = ElevationPortalGraph.evaluate(unevaluatedPortals);
-
-                // Pass evaluated portals back to buckets and construct a separate acceleration structure
-                // for elevation queries.
-                for (const bucket of Object.values(buckets)) {
-                    if (bucket instanceof FillBucket) {
-                        const vtLayer = data.layers[sourceLayerCoder.decode(bucket.sourceLayerIndex)];
-                        assert(vtLayer);
-                        bucket.setEvaluatedPortalGraph(evaluatedPortals, vtLayer, this.tileID.canonical, options.availableImages, options.brightness);
-                    }
-                }
-            }
+            if (HD.postprocessTile) HD.postprocessTile({buckets, data, sourceLayerCoder, canonical: this.tileID.canonical, options});
 
             PerformanceUtils.endMeasure(m, [["tileID", this.tileID.toString()], ["source", this.source]]);
 

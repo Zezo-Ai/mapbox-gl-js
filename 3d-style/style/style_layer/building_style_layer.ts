@@ -36,7 +36,11 @@ class BuildingStyleLayer extends StyleLayer {
         this._stats = {numRenderedVerticesInShadowPass: 0, numRenderedVerticesInTransparentPass: 0};
     }
 
-    prepare(): Promise<void> {
+    override mayUseHD(): boolean {
+        return true;
+    }
+
+    override prepare(): Promise<void> {
         return prepareHD();
     }
 

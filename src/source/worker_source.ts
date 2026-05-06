@@ -134,6 +134,10 @@ export type WorkerSourceVectorTileResult = {
     featureIndex: FeatureIndex;
     collisionBoxArray: CollisionBoxArray;
     hasTunnelGeometry?: boolean;
+    // True when any transferred bucket carries an HD extension (elevated roads, etc.).
+    // Main uses this flag to know whether to await the HD module before deserializing
+    // the payload — without it, unregistered extension classes would cause a crash.
+    containsHdExt?: boolean;
     rawTileData?: ArrayBuffer;
     resourceTiming?: Array<PerformanceResourceTiming>;
     brightness: number;

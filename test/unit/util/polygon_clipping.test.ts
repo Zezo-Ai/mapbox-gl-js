@@ -1,7 +1,8 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import {describe, test, expect} from '../../util/vitest';
-import {polygonSubdivision, gridSubdivision, clip} from '../../../src/util/polygon_clipping';
+import {gridSubdivision} from '../../../src/util/polygon_clipping';
+import {polygonSubdivision, clip} from '../../../3d-style/util/polygon_clipping_hd';
 import Point from '@mapbox/point-geometry';
 import {EdgeIterator} from '../../../3d-style/elevation/elevation_feature';
 

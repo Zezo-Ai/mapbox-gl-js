@@ -75,12 +75,6 @@ import starsFrag from './stars.fragment.glsl';
 import starsVert from './stars.vertex.glsl';
 import occlusionFrag from './occlusion.fragment.glsl';
 import occlusionVert from './occlusion.vertex.glsl';
-import elevatedStructuresDepthReconstructFrag from '../../3d-style/shaders/elevated_structures_depth_reconstruct.fragment.glsl';
-import elevatedStructuresDepthReconstructVert from '../../3d-style/shaders/elevated_structures_depth_reconstruct.vertex.glsl';
-import elevatedStructuresDepthFrag from '../../3d-style/shaders/elevated_structures_depth.fragment.glsl';
-import elevatedStructuresDepthVert from '../../3d-style/shaders/elevated_structures_depth.vertex.glsl';
-import elevatedStructuresModelFrag from '../../3d-style/shaders/elevated_structures_model.fragment.glsl';
-import elevatedStructuresModelVert from '../../3d-style/shaders/elevated_structures_model.vertex.glsl';
 // 3d-style related shaders
 import fillExtrusionDepthFrag from '../../3d-style/shaders/fill_extrusion_depth.fragment.glsl';
 import fillExtrusionDepthVert from '../../3d-style/shaders/fill_extrusion_depth.vertex.glsl';
@@ -165,9 +159,6 @@ export default {
     collisionBox: compile(collisionBoxFrag, collisionBoxVert),
     collisionCircle: compile(collisionCircleFrag, collisionCircleVert),
     debug: compile(debugFrag, debugVert),
-    elevatedStructuresDepth: compile(elevatedStructuresDepthFrag, elevatedStructuresDepthVert),
-    elevatedStructuresDepthReconstruct: compile(elevatedStructuresDepthReconstructFrag, elevatedStructuresDepthReconstructVert),
-    elevatedStructures: compile(elevatedStructuresModelFrag, elevatedStructuresModelVert),
     fill: compile(fillFrag, fillVert),
     fillOutline: compile(fillOutlineFrag, fillOutlineVert),
     fillOutlinePattern: compile(fillOutlinePatternFrag, fillOutlinePatternVert),

@@ -21,17 +21,18 @@ import loadGeometry from '../load_geometry';
 import toEvaluationFeature from '../evaluation_feature';
 import EvaluationParameters from '../../style/evaluation_parameters';
 import assert from 'assert';
-import {Point4D, clipLine, clipLines, lineSubdivision, type LineInfo} from '../../util/line_clipping';
+import {Point4D, clipLine} from '../../util/line_clipping';
 import {mapRange, warnOnce} from '../../util/util';
 import {tileToMeter} from '../../geo/mercator_coordinate';
 // Import LineAtlas as a module with side effects to ensure
 // it's registered as a serializable class on the main thread
 import '../../render/line_atlas';
 import {number as interpolate} from '../../style-spec/util/interpolate';
-import Point from "@mapbox/point-geometry";
-import {ELEVATION_CLIP_MARGIN, MARKUP_ELEVATION_BIAS, type ElevationType} from '../../../3d-style/elevation/elevation_constants';
-import {ElevationFeatures, ElevationFeatureSampler, elevationIdDebugColor, type Range, type ElevationFeature, EdgeIterator} from '../../../3d-style/elevation/elevation_feature';
+import {type ElevationType} from '../../../3d-style/elevation/elevation_constants';
 
+import type Point from "@mapbox/point-geometry";
+import type {ElevationFeature, Range} from '../../../3d-style/elevation/elevation_feature';
+import type {LineHDExtension} from '../../../3d-style/data/bucket/line_hd_extension';
 import type {ProjectionSpecification} from '../../style-spec/types';
 import type {CanonicalTileID, UnwrappedTileID} from '../../source/tile_id';
 import type {
@@ -109,7 +110,7 @@ type LineProgressFeatures = {
     elevationGroundScale: number;
 };
 
-interface Subsegment {
+export interface Subsegment {
     progress: Range;
     nextDir: Point | undefined;
     prevDir: Point | undefined;
@@ -188,8 +189,13 @@ class LineBucket implements Bucket {
 
     elevationType: ElevationType = 'none';
     isSeaLevelReference: boolean = false;
-    heightRange: Range | undefined;
     showElevationIdDebug: boolean = false;
+
+    // Optional HD augmentation, populated by maybeAttachLineHDExt
+    // (3d-style/data/bucket/line_hd_extension.ts) when the layer declares
+    // `line-elevation-reference: 'hd-road-markup'`. Owns the (otherwise unread)
+    // heightRange tracking and the road-feature routing path.
+    hdExt: LineHDExtension | undefined;
 
     worldview: string;
     hasAppearances: boolean | null;
@@ -502,31 +508,8 @@ class LineBucket implements Bucket {
             }
         }
 
-        if (this.elevationType === 'road') {
-            const vertexOffset = this.layoutVertexArray.length;
-            const added = this.addElevatedRoadFeature(feature, geometry, canonical, elevationFeatures, join, cap, miterLimit, roundLimit);
-
-            if (!added) {
-                // Feature is not elevated but is rendered as part of (road) elevated bucket.
-                // Due to clipping we're actually passing (possibly) a slightly smaller subsegment
-                // of the original line.
-                const [clippedLines, linesInfo] = this.clipRuntimeLinesToTile(geometry, ELEVATION_CLIP_MARGIN);
-                for (let i = 0; i < clippedLines.length; i++) {
-                    const line = clippedLines[i];
-                    const info = linesInfo[i];
-
-                    const subseg: Subsegment = {
-                        progress: {min: info.progress.min, max: info.progress.max},
-                        nextDir: this.computeSegNextDir(info, line),
-                        prevDir: this.computeSegPrevDir(info, line)
-                    };
-
-                    const multiLineMetricsIndex = hasMapboxLineMetrics && info.parentIndex > 0 ? info.parentIndex : null;
-                    this.addLine(line, feature, canonical, join, cap, miterLimit, roundLimit, subseg, multiLineMetricsIndex);
-                }
-
-                this.fillNonElevatedRoadSegment(vertexOffset);
-            }
+        if (this.hdExt) {
+            this.hdExt.handleFeature(feature, geometry, canonical, elevationFeatures, join, cap, miterLimit, roundLimit, this);
         } else {
             for (let i = 0; i < geometry.length; i++) {
                 const line = geometry[i];
@@ -538,114 +521,15 @@ class LineBucket implements Bucket {
         this.programConfigurations.populatePaintArrays(this.layoutVertexArray.length, feature, index, imagePositions, availableImages, canonical, brightness, undefined, this.worldview);
     }
 
-    private computeSegNextDir(info: LineInfo, line: Point[]) {
-        assert(line.length > 1);
-        return info.nextPoint.sub(line.at(-2)).unit();
-    }
-
-    private computeSegPrevDir(info: LineInfo, line: Point[]) {
-        assert(line.length > 1);
-        return line[1].sub(info.prevPoint).unit();
-    }
-
-    private clipLinesToTile(lines: Point[][], margin: number): Point[][] {
-        return clipLines(lines, -margin, -margin, EXTENT + margin, EXTENT + margin);
-    }
-
-    private clipRuntimeLinesToTile(lines: Point[][], margin: number): [Point[][], LineInfo[]] {
-        const linesInfo: LineInfo[] = [];
-        const clipped = clipLines(lines, -margin, -margin, EXTENT + margin, EXTENT + margin, linesInfo);
-        return [clipped, linesInfo];
-    }
-
-    private addElevatedRoadFeature(feature: BucketFeature, geometry: Array<Array<Point>>, canonical: CanonicalTileID, elevationFeatures: ElevationFeature[] | undefined, join: string, cap: string, miterLimit: number, roundLimit: number): boolean {
-        interface ElevatedGeometry {
-            geometry: Point[];
-            elevation: ElevationFeature;
-            elevationTileID: CanonicalTileID;
-            segment: Subsegment;
-        }
-
-        const elevatedGeometry: ElevatedGeometry[] = [];
-
-        const tiledElevation = ElevationFeatures.getElevationFeature(feature, elevationFeatures);
-        if (tiledElevation) {
-            const clippedLines = this.clipLinesToTile(geometry, ELEVATION_CLIP_MARGIN);
-            const preparedLines = this.prepareElevatedLines(clippedLines, tiledElevation, canonical);
-            for (const line of preparedLines) {
-                elevatedGeometry.push({geometry: line, elevation: tiledElevation, elevationTileID: canonical,
-                    segment: {progress: {min: 0, max: 1}, nextDir: undefined, prevDir: undefined}});
-            }
-        }
-
-        if (elevatedGeometry.length === 0) return false;
-
-        // Construct renderable geometries
-        for (const elevated of elevatedGeometry) {
-            const vertexOffset = this.layoutVertexArray.length;
-
-            this.addLine(elevated.geometry, feature, canonical, join, cap, miterLimit, roundLimit);
-
-            // Populate height information for each vertex
-            const sampler = new ElevationFeatureSampler(canonical, elevated.elevationTileID);
-
-            if (elevated.elevation) {
-                const col = this.showElevationIdDebug ? elevationIdDebugColor(elevated.elevation.id) : null;
-                for (let i = vertexOffset; i < this.layoutVertexArray.length; i++) {
-                    const point = new Point(this.layoutVertexArray.int16[i * 6] >> 1, this.layoutVertexArray.int16[i * 6 + 1] >> 1);
-
-                    const height = sampler.pointElevation(point, elevated.elevation, MARKUP_ELEVATION_BIAS);
-                    this.updateHeightRange(height);
-
-                    this.zOffsetVertexArray.emplaceBack(height, 0.0, 0.0);
-                    if (col) {
-                        this.elevationIdColVertexArray.emplaceBack(col[0], col[1], col[2]);
-                    } else if (this.showElevationIdDebug) {
-                        this.elevationIdColVertexArray.emplaceBack(0.0, 0.0, 0.0);
-                    }
-                }
-            } else {
-                this.fillNonElevatedRoadSegment(vertexOffset);
-            }
-
-            assert(this.layoutVertexArray.length === this.zOffsetVertexArray.length);
-        }
-
-        return true;
-    }
-
-    private prepareElevatedLines(lines: Point[][], elevation: ElevationFeature, tileID: CanonicalTileID) {
-        if (elevation.constantHeight != null) {
-            return lines;
-        }
-
-        // Subdivide the lines along the assigned elevation curve
-        const splitLines: Point[][] = [];
-
-        const metersToTile = 1.0 / tileToMeter(tileID);
-
-        for (const line of lines) {
-            lineSubdivision(line, new EdgeIterator(elevation, metersToTile), false, splitLines);
-        }
-
-        return splitLines;
-    }
-
-    private fillNonElevatedRoadSegment(vertexOffset: number) {
+    /**
+     * @private
+     */
+    fillNonElevatedRoadSegment(vertexOffset: number) {
         for (let i = vertexOffset; i < this.layoutVertexArray.length; i++) {
             this.zOffsetVertexArray.emplaceBack(0, 0, 0);
             if (this.showElevationIdDebug) {
                 this.elevationIdColVertexArray.emplaceBack(0, 0, 0);
             }
-        }
-    }
-
-    private updateHeightRange(height: number) {
-        if (this.heightRange) {
-            this.heightRange.min = Math.min(this.heightRange.min, height);
-            this.heightRange.max = Math.max(this.heightRange.max, height);
-        } else {
-            this.heightRange = {min: height, max: height};
         }
     }
 

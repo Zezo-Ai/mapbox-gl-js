@@ -22,7 +22,7 @@ import Lights from '../../3d-style/style/lights';
 import {getProperties as getAmbientProps} from '../../3d-style/style/ambient_light_properties';
 import {getProperties as getDirectionalProps} from '../../3d-style/style/directional_light_properties';
 import {createExpression} from '../style-spec/expression/index';
-import {prepareHD as prepareHDWorker} from '../../modules/hd_worker';
+import {prepareHD as prepareHDMain} from '../../modules/hd_main';
 import {
     validateStyle,
     validateLayoutProperty,
@@ -199,8 +199,6 @@ const ignoredDiffOperations = pick(diffOperations, [
  * Layer types that has no features and are not queryable with QRF API.
  */
 const featurelessLayerTypes = new Set(['background', 'sky', 'slot', 'custom']);
-
-const hdlayerTypes = new Set(['building']);
 
 const empty = emptyStyle();
 
@@ -1860,8 +1858,17 @@ class Style extends Evented<MapEvents> {
             if (layer.visibility !== 'none' || layer.hasTransition()) layer.recalculate(parameters, this._availableImages);
             if (!layer.isHidden(parameters.zoom)) {
 
-                if (hdlayerTypes.has(layer.type)) {
-                    void prepareHDWorker(); // load HD worker code so that bucket transfers to main thread work
+                if (layer.mayUseHD()) {
+                    // Preload HD on both threads so bucket transfers from worker succeed and
+                    // main can render without an extra await. Fire-and-forget: the tile-level
+                    // gate in WorkerTile.parse / vector_tile_source `done()` awaits the same
+                    // load promise for any tile that actually carries HD content.
+                    // `layer.prepare()` fires the worker-side HD load; `prepareHDMain()` is
+                    // called here (rather than inside prepare()) because importing hd_main
+                    // from style_layer.ts would drag the main-only chunk into the worker
+                    // bundle.
+                    void layer.prepare();
+                    void prepareHDMain();
                 }
 
                 const sourceCache = this.getLayerSourceCache(layer);

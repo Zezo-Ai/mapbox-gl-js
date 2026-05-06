@@ -1,4 +1,5 @@
-import StyleLayer from '../style_layer';
+import StyleLayer, {rawLayoutMayUseHD} from '../style_layer';
+import {prepareHD} from '../../../modules/hd_worker';
 import CircleBucket from '../../data/bucket/circle_bucket';
 import {polygonIntersectsBufferedPoint} from '../../util/intersection_tests';
 import {getMaximumPaintValue, translateDistance, tilespaceTranslate} from '../query_utils';
@@ -101,6 +102,14 @@ class CircleStyleLayer extends StyleLayer {
 
     override hasElevation(): boolean {
         return this.layout && this.layout.get('circle-elevation-reference') !== 'none';
+    }
+
+    override mayUseHD(): boolean {
+        return rawLayoutMayUseHD(this, 'circle-elevation-reference', v => v === 'hd-road-markup');
+    }
+
+    override prepare(): Promise<void> {
+        return this.mayUseHD() ? prepareHD() : Promise.resolve();
     }
 }
 

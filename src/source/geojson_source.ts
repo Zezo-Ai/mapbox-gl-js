@@ -3,6 +3,7 @@ import EXTENT from '../style-spec/data/extent';
 import {ResourceType} from '../util/ajax';
 import browser from '../util/browser';
 import {makeFQID} from '../util/fqid';
+import {HD, prepareHD} from '../../modules/hd_main';
 
 import type {ISource, SourceEvents} from './source';
 import type {Map as MapboxMap} from '../ui/map';
@@ -485,6 +486,20 @@ class GeoJSONSource extends Evented<SourceEvents> implements ISource {
 
             if (err) {
                 return callback(err);
+            }
+
+            // Same HD gate as vector_tile_source.done(): await the HD module before
+            // deserializing a tile that carries extension classes (elevated roads etc.),
+            // otherwise `loadVectorData` would hit the unregistered-class throw.
+            if (data && data.containsHdExt && !HD.loaded) {
+                const finishLoad = () => {
+                    if (tile.aborted) return callback(null);
+                    if (!HD.loaded) return callback(new Error('HD module failed to load'));
+                    tile.loadVectorData(data, this.map.painter, message === 'reloadTile');
+                    callback(null);
+                };
+                prepareHD().then(finishLoad, finishLoad);
+                return;
             }
 
             tile.loadVectorData(data, this.map.painter, message === 'reloadTile');

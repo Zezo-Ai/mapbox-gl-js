@@ -1050,7 +1050,8 @@ function addFeature(bucket: SymbolBucket,
     }
 
     const elevationFeatureId = feature.properties ? +feature.properties[PROPERTY_ELEVATION_ID] : null;
-    const elevationFeatureIndex = elevationFeatureId && bucket.elevationFeatureIdToIndex ? bucket.elevationFeatureIdToIndex.get(elevationFeatureId) : 0xffff;
+    const elevationFeatureIdToIndex = bucket.hdExt ? bucket.hdExt.elevationFeatureIdToIndex : undefined;
+    const elevationFeatureIndex = elevationFeatureId && elevationFeatureIdToIndex ? elevationFeatureIdToIndex.get(elevationFeatureId) : 0xffff;
 
     const addSymbolAtAnchor = (line: Array<Point>, anchor: Anchor, canonicalId: CanonicalTileID) => {
         if (anchor.x < 0 || anchor.x >= EXTENT || anchor.y < 0 || anchor.y >= EXTENT) {

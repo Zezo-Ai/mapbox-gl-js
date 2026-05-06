@@ -203,7 +203,7 @@ export class DefaultPlacementAlgorithm implements PlacementAlgorithm {
                 verticalTextFeatureIndex = collisionArrays.verticalTextFeatureIndex;
             }
 
-            const elevationFeature = bucket.elevationFeatures ? bucket.elevationFeatures[symbolInstance.elevationFeatureIndex] : undefined;
+            const elevationFeature = bucket.hdExt ? bucket.hdExt.elevationFeatures[symbolInstance.elevationFeatureIndex] : undefined;
 
             const updateBoxData = (box: SingleCollisionBox) => {
                 box.tileID = placement.retainedQueryData[bucket.bucketInstanceId].tileID;
@@ -486,8 +486,8 @@ export class DefaultPlacementAlgorithm implements PlacementAlgorithm {
             placement.buildingIndex.updateZOffset(bucket, tileID);
         }
 
-        if (bucket.elevationType === 'road') {
-            bucket.updateRoadElevation(tileID.canonical);
+        if (bucket.elevationType === 'road' && bucket.hdExt) {
+            bucket.hdExt.updateRoadElevation(bucket, tileID.canonical);
         }
 
         bucket.updateZOffset();

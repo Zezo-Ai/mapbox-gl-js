@@ -1,5 +1,6 @@
 import Point from '@mapbox/point-geometry';
-import StyleLayer from '../style_layer';
+import StyleLayer, {rawLayoutMayUseHD} from '../style_layer';
+import {prepareHD} from '../../../modules/hd_worker';
 import LineBucket from '../../data/bucket/line_bucket';
 import {polygonIntersectsBufferedMultiLine} from '../../util/intersection_tests';
 import {getMaximumPaintValue, translateDistance, translate} from '../query_utils';
@@ -224,6 +225,14 @@ class LineStyleLayer extends StyleLayer {
 
     override hasElevation(): boolean {
         return this.layout && this.layout.get('line-elevation-reference') !== 'none';
+    }
+
+    override mayUseHD(): boolean {
+        return rawLayoutMayUseHD(this, 'line-elevation-reference', v => v === 'hd-road-markup');
+    }
+
+    override prepare(): Promise<void> {
+        return this.mayUseHD() ? prepareHD() : Promise.resolve();
     }
 
     override hasOffscreenPass(): boolean {

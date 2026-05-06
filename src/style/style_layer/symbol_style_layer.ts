@@ -1,5 +1,6 @@
 import {mat4} from 'gl-matrix';
-import StyleLayer from '../style_layer';
+import StyleLayer, {rawLayoutMayUseHD} from '../style_layer';
+import {prepareHD} from '../../../modules/hd_worker';
 import assert from 'assert';
 import SymbolBucket from '../../data/bucket/symbol_bucket';
 import resolveTokens from '../../util/resolve_tokens';
@@ -309,6 +310,14 @@ class SymbolStyleLayer extends StyleLayer {
 
     override hasElevation(): boolean {
         return this.layout && this.layout.get('symbol-elevation-reference') === 'hd-road-markup';
+    }
+
+    override mayUseHD(): boolean {
+        return rawLayoutMayUseHD(this, 'symbol-elevation-reference', v => v === 'hd-road-markup');
+    }
+
+    override prepare(): Promise<void> {
+        return this.mayUseHD() ? prepareHD() : Promise.resolve();
     }
 }
 

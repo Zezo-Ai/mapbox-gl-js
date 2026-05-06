@@ -26,7 +26,7 @@ import circle from './draw_circle';
 import assert from 'assert';
 import heatmap from './draw_heatmap';
 import line, {prepare as prepareLine} from './draw_line';
-import fill, {drawDepthPrepass as fillDepthPrepass, drawGroundShadowMask as fillGroundShadowMask} from './draw_fill';
+import fill from './draw_fill';
 import fillExtrusion from './draw_fill_extrusion';
 import {HD, prepareHD} from '../../modules/hd_main';
 import hillshade from './draw_hillshade';
@@ -162,13 +162,6 @@ const prepare: Partial<Record<CoreStyleLayer['type'] | HDStyleLayer['type'], Pre
     line: prepareLine,
     model: modelPrepare,
     raster: prepareRaster,
-};
-
-const depthPrepass = {
-    fill: fillDepthPrepass
-};
-const groundShadowMask = {
-    fill: fillGroundShadowMask
 };
 
 async function setupHD() {
@@ -1378,10 +1371,9 @@ class Painter {
                 const renderDepthSubpass = (pass: DepthPrePass) => {
                     for (this.currentLayer = 0; this.currentLayer < orderedLayers.length; this.currentLayer++) {
                         const depthPassLayer = orderedLayers[this.currentLayer];
-                        if (depthPrepass[depthPassLayer.type]) {
+                        if (depthPassLayer.type === 'fill' && HD.drawDepthPrepass) {
                             const sourceCache = this.style.getLayerSourceCache(depthPassLayer);
-                            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-                            depthPrepass[depthPassLayer.type](this, sourceCache, depthPassLayer, coordsForTranslucentLayer(depthPassLayer, sourceCache), pass);
+                            HD.drawDepthPrepass(this, sourceCache, depthPassLayer, coordsForTranslucentLayer(depthPassLayer, sourceCache), pass);
                         }
                     }
                 };
@@ -1419,10 +1411,9 @@ class Painter {
                     const saveCurrentLayer = this.currentLayer;
                     for (this.currentLayer = 0; this.currentLayer < orderedLayers.length; this.currentLayer++) {
                         const maskLayer = orderedLayers[this.currentLayer];
-                        if (groundShadowMask[maskLayer.type]) {
+                        if (maskLayer.type === 'fill' && HD.drawGroundShadowMask) {
                             const sourceCache = this.style.getLayerSourceCache(maskLayer);
-                            // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-                            groundShadowMask[maskLayer.type](this, sourceCache, maskLayer, coordsForTranslucentLayer(maskLayer, sourceCache));
+                            HD.drawGroundShadowMask(this, sourceCache, maskLayer, coordsForTranslucentLayer(maskLayer, sourceCache));
                         }
                     }
                     this.currentLayer = saveCurrentLayer;

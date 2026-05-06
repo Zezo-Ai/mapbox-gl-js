@@ -361,6 +361,24 @@ class StyleLayer extends Evented {
         return false;
     }
 
+    // Conservative predicate used to preload the HD module on both threads before the
+    // first relevant tile parses/deserializes. Reads the *raw* layout declaration via
+    // `_unevaluatedLayout` because this runs on the worker before layers have been
+    // recalculated, and on the main thread during recalculate. Data-driven expression
+    // declarations are reported as "may use HD" because we can't evaluate them without
+    // per-feature context — the worst case is an unnecessary HD preload.
+    mayUseHD(): boolean {
+        return false;
+    }
+
+    // Worker-side HD preload hook. Default no-op; HD-relevant subclasses return
+    // `prepareHD()` (from `modules/hd_worker`) when their layout declares HD use.
+    // Main-side preload stays at call sites — importing `prepareHDMain` here would
+    // pull the main-only chunk into the worker bundle.
+    prepare(): Promise<void> {
+        return Promise.resolve();
+    }
+
     isSky(): boolean {
         return false;
     }
@@ -489,6 +507,22 @@ class StyleLayer extends Evented {
         _layoutVertexArrayOffset: number,
         scope: string | undefined
     ): boolean | number | undefined { return undefined; }
+}
+
+/**
+ * Reads a raw layout declaration and evaluates `predicate` against it. Returns `true`
+ * if the declaration is an expression (conservative — we can't evaluate without
+ * feature/zoom context), `false` if the declaration is missing, otherwise defers to
+ * `predicate`. Shared helper for `mayUseHD` implementations on subclasses.
+ *
+ * @private
+ */
+export function rawLayoutMayUseHD(layer: StyleLayer, propName: string, predicate: (v: string) => boolean): boolean {
+    if (!layer._unevaluatedLayout) return false;
+    const val = layer._unevaluatedLayout.getValue(propName);
+    if (val === undefined) return false;
+    if (typeof val !== 'string') return true;
+    return predicate(val);
 }
 
 export default StyleLayer;

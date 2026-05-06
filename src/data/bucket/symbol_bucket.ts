@@ -51,11 +51,10 @@ import {plugin as globalRTLTextPlugin, getRTLTextPluginStatus} from '../../sourc
 import {resamplePred} from '../../geo/projection/resample';
 import {tileCoordToECEF} from '../../geo/projection/globe_util';
 import {getProjection} from '../../geo/projection/index';
-import {mat4, quat, vec3} from 'gl-matrix';
+import {mat4, vec3} from 'gl-matrix';
 import assert from 'assert';
 import {regionsEquals} from '../../../3d-style/source/replacement_source';
 import {clamp} from '../../util/util';
-import {tileToMeter} from '../../geo/mercator_coordinate';
 import {type CollisionBoxArray, type CollisionBox, type SymbolInstance, SymbolOrientationArray} from '../array_types';
 import {type SymbolQuad, getIconQuads, getGlyphQuads} from '../../symbol/quads';
 import {FeatureAppearances} from './feature_appearances';
@@ -88,7 +87,7 @@ import type {SpritePositions} from '../../util/image';
 import type {TypedStyleLayer} from '../../style/style_layer/typed_style_layer';
 import type {ElevationType} from '../../../3d-style/elevation/elevation_constants';
 import type {ImageId} from '../../style-spec/expression/types/image_id';
-import type {ElevationFeature} from '../../../3d-style/elevation/elevation_feature';
+import type {SymbolHDExtension} from '../../../3d-style/data/bucket/symbol_hd_extension';
 import type {ImageVariant, StringifiedImageVariant} from '../../style-spec/expression/types/image_variant';
 import type {ImagePositionMap} from '../../render/image_atlas';
 import type {StyleImage} from '../../style/style_image';
@@ -279,12 +278,6 @@ function updateGlobeVertexNormal(array: SymbolGlobeExtArray, vertexIdx: number, 
     array.float32[offset + 1] = normY;
     array.float32[offset + 2] = normZ;
 }
-
-const addOrientationVertex = (orientationArray: SymbolOrientationArray, numVertices: number, orientedXAxis: vec3, orientedYAxis: vec3) => {
-    for (let i = 0; i < numVertices; i++) {
-        orientationArray.emplaceBack(orientedXAxis[0], orientedXAxis[1], orientedXAxis[2], orientedYAxis[0], orientedYAxis[1], orientedYAxis[2]);
-    }
-};
 
 function addDynamicAttributes(dynamicLayoutVertexArray: StructArray, x: number, y: number, z: number, angle: number) {
     dynamicLayoutVertexArray.emplaceBack(x, y, z, angle);
@@ -684,9 +677,7 @@ class SymbolBucket implements Bucket {
     zOffsetBuffersNeedUpload: boolean;
 
     elevationType: ElevationType;
-    elevationFeatures: Array<ElevationFeature>;
-    elevationFeatureIdToIndex: Map<number, number>;
-    elevationStateComplete: boolean;
+    hdExt?: SymbolHDExtension;
 
     activeReplacements: Array<Region>;
     replacementUpdateTime: number;
@@ -760,7 +751,6 @@ class SymbolBucket implements Bucket {
         this.zOffsetBuffersNeedUpload = false;
 
         this.elevationType = 'none';
-        this.elevationStateComplete = false;
 
         this.activeReplacements = [];
         this.replacementUpdateTime = 0;
@@ -1101,15 +1091,8 @@ class SymbolBucket implements Bucket {
 
         if (layout.get('symbol-elevation-reference') === 'hd-road-markup') {
             this.elevationType = 'road';
-            if (options.elevationFeatures) {
-                if (!this.elevationFeatures && options.elevationFeatures.length > 0) {
-                    this.elevationFeatures = [];
-                    this.elevationFeatureIdToIndex = new Map<number, number>();
-                }
-                for (const elevationFeature of options.elevationFeatures) {
-                    this.elevationFeatureIdToIndex.set(elevationFeature.id, this.elevationFeatures.length);
-                    this.elevationFeatures.push(elevationFeature);
-                }
+            if (this.hdExt && options.elevationFeatures && options.elevationFeatures.length > 0) {
+                this.hdExt.addElevationFeatures(options.elevationFeatures);
             }
         } else if (layout.get('symbol-z-elevate')) {
             this.elevationType = 'offset';
@@ -1465,104 +1448,6 @@ class SymbolBucket implements Bucket {
                     );
                 }
             }
-        }
-    }
-
-    updateRoadElevation(canonical: CanonicalTileID) {
-        if (this.elevationType !== 'road' || !this.elevationFeatures) {
-            return;
-        }
-
-        if (this.elevationStateComplete) {
-            // Road elevation is updated only once
-            return;
-        }
-
-        this.elevationStateComplete = true;
-        this.hasAnyZOffset = false;
-        let dataChanged = false;
-
-        const tileToMeters = tileToMeter(canonical);
-        const metersToTile = 1.0 / tileToMeters;
-        let hasTextOrientation = false;
-        let hasIconOrientation = false;
-
-        for (let s = 0; s < this.symbolInstances.length; s++) {
-            const symbolInstance = this.symbolInstances.get(s);
-            const orientedXAxis = vec3.fromValues(1, 0, 0);
-            const orientedYAxis = vec3.fromValues(0, 1, 0);
-
-            const {
-                numHorizontalGlyphVertices,
-                numVerticalGlyphVertices,
-                numIconVertices,
-                numVerticalIconVertices
-            } = symbolInstance;
-
-            const hasText = numHorizontalGlyphVertices > 0 || numVerticalGlyphVertices > 0;
-            const hasIcon = numIconVertices > 0;
-
-            const elevationFeature = this.elevationFeatures[symbolInstance.elevationFeatureIndex];
-            if (elevationFeature) {
-                // Add 7.5cm offset to reduce z-fighting issues
-                const anchor = new Point(symbolInstance.tileAnchorX, symbolInstance.tileAnchorY);
-                const newZOffset = 0.075 + elevationFeature.pointElevation(anchor);
-                if (symbolInstance.zOffset !== newZOffset) {
-                    dataChanged = true;
-                    symbolInstance.zOffset = newZOffset;
-                }
-
-                if (newZOffset !== 0) {
-                    this.hasAnyZOffset = true;
-                }
-
-                const slopeNormal = elevationFeature.computeSlopeNormal(anchor, metersToTile);
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                const rotation = quat.rotationTo(quat.create(), vec3.fromValues(0, 0, 1), slopeNormal);
-
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                vec3.transformQuat(orientedXAxis, orientedXAxis, rotation);
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                vec3.transformQuat(orientedYAxis, orientedYAxis, rotation);
-
-                orientedXAxis[2] *= tileToMeters;
-                orientedYAxis[2] *= tileToMeters;
-
-                // Check for existence of non-default orientation data
-                if (orientedXAxis[0] !== 1.0 || orientedXAxis[1] !== 0.0 || orientedXAxis[2] !== 0.0 ||
-                    orientedYAxis[0] !== 0.0 || orientedYAxis[1] !== 1.0 || orientedYAxis[2] !== 0.0) {
-                    hasTextOrientation = hasTextOrientation || hasText;
-                    hasIconOrientation = hasIconOrientation || hasIcon;
-                }
-            }
-
-            if (hasText) {
-                addOrientationVertex(this.text.orientationVertexArray, numHorizontalGlyphVertices, orientedXAxis, orientedYAxis);
-                addOrientationVertex(this.text.orientationVertexArray, numVerticalGlyphVertices, orientedXAxis, orientedYAxis);
-            }
-            if (hasIcon) {
-                const {placedIconSymbolIndex, verticalPlacedIconSymbolIndex} = symbolInstance;
-                if (placedIconSymbolIndex >= 0) {
-                    addOrientationVertex(this.icon.orientationVertexArray, numIconVertices, orientedXAxis, orientedYAxis);
-                }
-
-                if (verticalPlacedIconSymbolIndex >= 0) {
-                    addOrientationVertex(this.icon.orientationVertexArray, numVerticalIconVertices, orientedXAxis, orientedYAxis);
-                }
-            }
-        }
-
-        // If there is no orientation data, clear the vertex arrays so vertex buffers won't be created.
-        if (!hasTextOrientation) {
-            this.text.orientationVertexArray = undefined;
-        }
-        if (!hasIconOrientation) {
-            this.icon.orientationVertexArray = undefined;
-        }
-
-        if (dataChanged) {
-            this.zOffsetBuffersNeedUpload = true;
-            this.zOffsetSortDirty = true;
         }
     }
 
@@ -2537,21 +2422,6 @@ class SymbolBucket implements Bucket {
         if (this.icon.indexBuffer) this.icon.indexBuffer.updateData(this.icon.indexArray);
     }
 
-    getElevationFeatureForText(placedSymbolIdx: number): ElevationFeature | undefined {
-        const placedSymbols = this.text.placedSymbolArray;
-        assert(this.text.symbolInstanceIndices.length === placedSymbols.length);
-        const symbolInstanceIndex = this.text.symbolInstanceIndices[placedSymbolIdx];
-        const symbolInstance = this.symbolInstances.get(symbolInstanceIndex);
-        assert(symbolInstance);
-        const elevationFeatureIndex = symbolInstance.elevationFeatureIndex;
-        assert(elevationFeatureIndex === 0xffff || elevationFeatureIndex < this.elevationFeatures.length);
-
-        let elevationFeature: ElevationFeature | undefined;
-        if (this.elevationFeatures && elevationFeatureIndex < this.elevationFeatures.length) {
-            elevationFeature = this.elevationFeatures[elevationFeatureIndex];
-        }
-        return elevationFeature;
-    }
 }
 
 register(SymbolBucket, 'SymbolBucket', {

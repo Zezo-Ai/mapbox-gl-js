@@ -14,8 +14,9 @@ import {regionsEquals, transformPointToTile, pointInFootprint, skipClipping} fro
 import {LayerTypeMask} from '../../../3d-style/util/conflation';
 import {type FeatureState, type GlobalProperties} from '../../../src/style-spec/expression/index';
 import Point from '@mapbox/point-geometry';
-import {ElevationFeatures, type ElevationFeature} from '../../elevation/elevation_feature';
+import {getElevationFeature} from '../../elevation/get_elevation_feature';
 
+import type {ElevationFeature} from '../../elevation/elevation_feature';
 import type ModelStyleLayer from '../../style/style_layer/model_style_layer';
 import type {ReplacementSource, Region} from '../../../3d-style/source/replacement_source';
 import type {EvaluationFeature} from '../../../src/data/evaluation_feature';
@@ -479,7 +480,7 @@ class ModelBucket implements Bucket {
         // Query elevation feature once per feature
         let tiledElevation: ElevationFeature | undefined;
         if (elevationFeatures) {
-            tiledElevation = ElevationFeatures.getElevationFeature(feature, elevationFeatures);
+            tiledElevation = getElevationFeature(feature, elevationFeatures);
         }
 
         for (const geometries of geometry) {

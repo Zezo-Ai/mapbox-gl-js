@@ -13,6 +13,12 @@ import buildingBloomFrag from './building_bloom.fragment.glsl';
 import buildingBloomVert from './building_bloom.vertex.glsl';
 import buildingDepthFrag from './building_depth.fragment.glsl';
 import buildingDepthVert from './building_depth.vertex.glsl';
+import elevatedStructuresDepthFrag from './elevated_structures_depth.fragment.glsl';
+import elevatedStructuresDepthVert from './elevated_structures_depth.vertex.glsl';
+import elevatedStructuresModelFrag from './elevated_structures_model.fragment.glsl';
+import elevatedStructuresModelVert from './elevated_structures_model.vertex.glsl';
+import elevatedStructuresDepthReconstructFrag from './elevated_structures_depth_reconstruct.fragment.glsl';
+import elevatedStructuresDepthReconstructVert from './elevated_structures_depth_reconstruct.vertex.glsl';
 import rasterParticleFrag from '../../src/shaders/raster_particle.fragment.glsl';
 import rasterParticleVert from '../../src/shaders/raster_particle.vertex.glsl';
 import rasterParticleDrawFrag from '../../src/shaders/raster_particle_draw.fragment.glsl';
@@ -40,6 +46,9 @@ export default {
     snowParticle: compile(snowFrag, snowVert),
     rainParticle: compile(rainFrag, rainVert),
     vignette: compile(vignetteFrag, vignetteVert),
+    elevatedStructuresDepth: compile(elevatedStructuresDepthFrag, elevatedStructuresDepthVert),
+    elevatedStructures: compile(elevatedStructuresModelFrag, elevatedStructuresModelVert),
+    elevatedStructuresDepthReconstruct: compile(elevatedStructuresDepthReconstructFrag, elevatedStructuresDepthReconstructVert),
 };
 
 export const preludeShaders = {

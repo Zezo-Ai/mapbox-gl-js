@@ -1,4 +1,5 @@
-import StyleLayer from '../style_layer';
+import StyleLayer, {rawLayoutMayUseHD} from '../style_layer';
+import {prepareHD} from '../../../modules/hd_worker';
 import FillBucket from '../../data/bucket/fill_bucket';
 import {polygonIntersectsMultiPolygon} from '../../util/intersection_tests';
 import {translateDistance, translate} from '../query_utils';
@@ -108,6 +109,14 @@ class FillStyleLayer extends StyleLayer {
 
     override hasElevation(): boolean {
         return this.layout && this.layout.get('fill-elevation-reference') !== 'none';
+    }
+
+    override mayUseHD(): boolean {
+        return rawLayoutMayUseHD(this, 'fill-elevation-reference', v => v !== 'none');
+    }
+
+    override prepare(): Promise<void> {
+        return this.mayUseHD() ? prepareHD() : Promise.resolve();
     }
 
     override hasShadowPass(): boolean {
