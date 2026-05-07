@@ -712,7 +712,7 @@ const indoorLayers = [{
 ];
 
 
-const style = {
+window.style = {
     version: 8,
     imports: [{
         id: 'standard',

@@ -25,14 +25,12 @@
 <div id="map"></div>
 <div class="tooltip" id="tooltip">This is a tooltip!</div>
 
+<script src='/debug/dynamic.js'></script>
 <script type="module">
 import mapboxgl from '../dist/esm-dev/mapbox-gl.js';
 import {getAccessToken} from './access_token_generated.js';
 
 mapboxgl.accessToken = getAccessToken();
-</script>
-<script src='/debug/dynamic.js'></script>
-<script>
 
 var newStyle = window.dynamic;
 newStyle.sources.composite.promoteId = {
@@ -48,7 +46,6 @@ var map = window.map = new mapboxgl.Map({
     style: newStyle
 });
 
-map.set
 const tooltip = document.getElementById('tooltip');
 
 let hoveredFeature;
@@ -77,7 +74,6 @@ map.addInteraction('buildingclick', {
     featureset: {featuresetId: 'buildings', importId: ''},
     handler: (e) => console.log(e.feature ? e.feature.id : null)
 });
-
 
 </script>
 </body>
