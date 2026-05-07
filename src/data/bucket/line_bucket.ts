@@ -1002,9 +1002,10 @@ class LineBucket implements Bucket {
         } else {
             warnOnce(`line-progress evaluation for ${this.layerIds[0]} requires enabling 'lineMetrics' for the source.`);
         }
-        let variableWidth = 0.0;
+        let variableWidth: number = 0.0;
         if (this.variableWidthValue && this.variableWidthValue.kind !== 'constant') {
             variableWidth = this.variableWidthValue.evaluate(this.evaluationGlobals, this.lineFeature) || 0.0;
+            variableWidth = variableWidth * 0.5;
         }
         const elevationGroundScale = this.evaluateElevationGroundScale();
         if (this.elevationType !== 'offset') {
