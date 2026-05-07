@@ -9,6 +9,13 @@ import {getHTML, getDiagnosticsHTML} from './test/util/html_generator';
 import type {DiagnosticInfo} from './test/util/html_generator';
 import type {Plugin} from 'vite';
 
+export function suiteDirs(name: 'render-tests' | 'query-tests'): string[] {
+    const dirs = [`test/integration/${name}`];
+    const internalDir = `internal/test/integration/${name}`;
+    if (existsSync(internalDir)) dirs.push(internalDir);
+    return dirs;
+}
+
 // On CI, test assets are immutable for the duration of the run. Telling the
 // browser to cache them aggressively eliminates repeated conditional-request
 // round-trips for tiles, glyphs, sprites, and models shared across tests.

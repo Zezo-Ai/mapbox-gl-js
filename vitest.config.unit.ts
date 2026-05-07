@@ -2,9 +2,7 @@ import {basename as pathBasename} from 'node:path';
 import {readFileSync, globSync} from 'node:fs';
 import {mergeConfig, defineConfig} from 'vitest/config';
 import {playwright} from '@vitest/browser-playwright';
-import baseConfig from './vitest.config.base';
-
-const isCI = process.env.CI === 'true';
+import baseConfig, {isCI} from './vitest.config.base';
 
 function styleSpecFixtures() {
     const virtualModuleId = 'virtual:style-spec/fixtures';
@@ -31,19 +29,19 @@ function styleSpecFixtures() {
 
 export default mergeConfig(baseConfig, defineConfig({
     test: {
+        // On CI, unit tests install playwright with `--only-shell`, so we must
+        // not pin a `channel` — that would request the full chromium binary
+        // which isn't installed. Other configs use `--with-deps --no-shell`.
         browser: {
             provider: playwright(isCI ? {} : {launchOptions: {channel: 'chrome'}}),
-            instances: [
-                {browser: 'chromium'},
-            ],
+            instances: [{browser: 'chromium'}],
         },
         include: ['test/unit/**/*.test.ts'],
         setupFiles: ['test/unit/setup.ts'],
         reporters: isCI ? [
             ['html', {outputFile: './test/unit/vitest/index.html'}],
-            ['verbose', {summary: false}],
             ['github-actions']
-        ] : [['default']],
+        ] : undefined,
     },
     plugins: [
         styleSpecFixtures()
