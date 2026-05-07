@@ -253,7 +253,7 @@ void main() {
 #ifdef VARIABLE_LINE_WIDTH
     float left_width = a_z_offset_width.y;
     float right_width = a_z_offset_width.z;
-    halfwidth = u_width_scale * (left ? left_width : right_width) * 0.5;
+    halfwidth = u_width_scale * (left ? left_width : right_width);
 
     if (side_z_offset != 0.0) {
         // Lift the side of the line asymmetrically, based on the sign of side_z_offset
@@ -268,11 +268,11 @@ void main() {
 
     // Variable width is used as an offset for non-zero border_widths case.
     // Then the width of the visible part is defined by border_width.
-    offset = border_width > 0.0 ? (left_width + right_width) * u_width_scale * 0.5 : offset;
+    offset = border_width > 0.0 ? (left_width + right_width) * u_width_scale : offset;
     halfwidth = border_width > 0.0 ? border_width * u_width_scale * 0.5 : halfwidth;
 
     bool zero_right_width = border_width == 0.0 && right_width == 0.0;
-    symmetric_outset = zero_right_width ? u_width_scale * left_width * 0.5 : halfwidth;
+    symmetric_outset = zero_right_width ? u_width_scale * left_width : halfwidth;
 
     // If the right width is 0, we are rendering an asymmetric line with a stub side
     // We should disable antialiasing and blur on this side to be able to stich two lines together
