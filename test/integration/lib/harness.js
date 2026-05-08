@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import shuffleSeed from 'shuffle-seed';
 import {queue} from 'd3-queue';
 import {styleText} from 'node:util';
+// eslint-disable-next-line e18e/ban-dependencies
 import template from 'lodash/template.js';
 import createServer from './server.js';
 // eslint-disable-next-line import-x/order
@@ -45,11 +46,11 @@ export default function (directory, implementation, options, run) {
         .filter(style => {
             const test = style.metadata.test;
 
-            if (tests.length !== 0 && !tests.some(t => test.id.indexOf(t) !== -1)) {
+            if (tests.length !== 0 && !tests.some(t => test.id.includes(t))) {
                 return false;
             }
 
-            if (implementation === 'native' && process.env.BUILDTYPE !== 'Debug' && test.id.match(/^debug\//)) {
+            if (implementation === 'native' && process.env.BUILDTYPE !== 'Debug' && /^debug\//.test(test.id)) {
                 console.log(styleText('gray', `* skipped ${test.id}`));
                 return false;
             }

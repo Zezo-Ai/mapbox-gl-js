@@ -18,23 +18,23 @@ export function transformRequest(url, resourceTypeEnum) {
     if (url.startsWith('https://api.mapbox.com')) {
         const baseUrl = url.split('?')[0];
         switch (resourceTypeEnum) {
-            case 'Source':
-                return {url: baseUrl.replace(/^https:\/\/api\.mapbox\.com\/v4\/(.+)\.json$/, `${location.origin}/tilesets/$1`)};
+        case 'Source':
+            return {url: baseUrl.replace(/^https:\/\/api\.mapbox\.com\/v4\/(.+)\.json$/, `${location.origin}/tilesets/$1`)};
 
-            case 'Tile':
-                return {url: baseUrl.replace(/^https:\/\/api\.mapbox\.com\/(v4|raster\/v1|rasterarrays\/v1|3dtiles\/v1)\/(.+)$/, `${location.origin}/tiles/$2`)};
+        case 'Tile':
+            return {url: baseUrl.replace(/^https:\/\/api\.mapbox\.com\/(v4|raster\/v1|rasterarrays\/v1|3dtiles\/v1)\/(.+)$/, `${location.origin}/tiles/$2`)};
 
-            case 'Glyphs':
-                return {url: baseUrl.replace(/^https:\/\/api\.mapbox\.com\/fonts\/v1\/(.+)$/, `${location.origin}/glyphs/$1`)};
+        case 'Glyphs':
+            return {url: baseUrl.replace(/^https:\/\/api\.mapbox\.com\/fonts\/v1\/(.+)$/, `${location.origin}/glyphs/$1`)};
 
-            case 'SpriteJSON':
-            case 'SpriteImage': {
-                const match = baseUrl.match(/^https:\/\/api\.mapbox\.com\/styles\/v1\/(.+)\/sprite(.*)$/);
-                return {url: `${location.origin}/sprites/${match[1]}${match[2]}`};
-            }
+        case 'SpriteJSON':
+        case 'SpriteImage': {
+            const match = baseUrl.match(/^https:\/\/api\.mapbox\.com\/styles\/v1\/(.+)\/sprite(.*)$/);
+            return {url: `${location.origin}/sprites/${match[1]}${match[2]}`};
+        }
 
-            default:
-                return {url: baseUrl.replace('https://api.mapbox.com/', `${location.origin}/`)};
+        default:
+            return {url: baseUrl.replace('https://api.mapbox.com/', `${location.origin}/`)};
         }
     }
 

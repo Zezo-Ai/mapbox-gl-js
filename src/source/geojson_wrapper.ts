@@ -93,7 +93,6 @@ class LayerWrapper implements VectorTileLayerLike {
     }
 
     feature(i: number): VectorTileFeature {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- needed under strictNullChecks
         return new FeatureWrapper(this._jsonFeatures[i] as Feature) as unknown as VectorTileFeature;
     }
 }
@@ -107,7 +106,6 @@ class GeoJSONWrapper implements VectorTile {
         this.extent = EXTENT;
 
         for (const name of Object.keys(layers)) {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- needed under strictNullChecks
             this.layers[name] = new LayerWrapper(name, layers[name] as Array<Feature>) as unknown as VectorTileLayer;
         }
     }

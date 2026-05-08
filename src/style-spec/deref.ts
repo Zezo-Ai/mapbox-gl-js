@@ -5,17 +5,19 @@ import type {LayerSpecification} from './types';
 function deref(layer: LayerSpecification, parent: LayerSpecification): LayerSpecification {
     const result = {} as LayerSpecification;
 
-    for (const k in layer) {
+    const layerRec = layer as Record<string, unknown>;
+    const parentRec = parent as Record<string, unknown>;
+    const resultRec = result as Record<string, unknown>;
+
+    for (const k in layerRec) {
         if (k !== 'ref') {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            result[k] = layer[k];
+            resultRec[k] = layerRec[k];
         }
     }
 
     refProperties.forEach((k) => {
-        if (k in parent) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            result[k] = parent[k];
+        if (k in parentRec) {
+            resultRec[k] = parentRec[k];
         }
     });
 

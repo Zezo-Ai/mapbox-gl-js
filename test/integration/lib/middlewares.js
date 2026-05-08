@@ -59,8 +59,6 @@ export async function tilesets(req, res) {
     const fileContent = await fs.promises.readFile(filePath, 'utf8');
     const json = JSON.parse(fileContent);
 
-    const port = req.socket.localPort;
-
     res.writeHead(200, {'Content-Type': 'application/json'});
     res.end(JSON.stringify(json));
 }

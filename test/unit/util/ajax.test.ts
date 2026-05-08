@@ -161,7 +161,7 @@ describe('ajax', () => {
                     .map(([key, value]) => `${key}: ${value}`)
                     .join("\r\n");
             };
-            this.setRequestHeader = (key, value) => {
+            this.setRequestHeader = (key: string, value: string) => {
                 requestHeadersRef.current[key] = value;
             };
             this.send = () => {

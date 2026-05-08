@@ -1,11 +1,22 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./rollup/build/types-strict",
+    "rootDir": ".",
     "strictNullChecks": true,
-    "noEmit": true
+    "noImplicitAny": true
   },
-  "include": [],
+  "include": [
+    "./src/style-spec/data/**/*",
+    "./src/style-spec/reference/**/*.ts",
+    "./src/style-spec/reference/**/*.json"
+  ],
   "files": [
+    "./src/types/csscolorparser.d.ts",
+    "./src/types/glsl.d.ts",
+    "./src/types/import-meta.d.ts",
     "./3d-style/elevation/elevation_constants.ts",
     "./3d-style/render/texture_slots.ts",
     "./3d-style/util/draco_decoder_gltf.ts",
@@ -17,7 +28,6 @@
     "./src/gl/types.ts",
     "./src/render/raster.ts",
     "./src/source/geojson_wrapper.ts",
-    "./src/style-spec/data/extent.ts",
     "./src/style-spec/empty.ts",
     "./src/style-spec/error/validation_error.ts",
     "./src/style-spec/expression/parsing_error.ts",
@@ -26,7 +36,6 @@
     "./src/style-spec/expression/types/collator.ts",
     "./src/style-spec/expression/types/image_id.ts",
     "./src/style-spec/format.ts",
-    "./src/style-spec/reference/latest.ts",
     "./src/style-spec/types.ts",
     "./src/style-spec/types/brand.ts",
     "./src/style-spec/types/lut.ts",
