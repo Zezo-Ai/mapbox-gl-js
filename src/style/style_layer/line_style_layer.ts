@@ -126,6 +126,10 @@ class LineStyleLayer extends StyleLayer {
             const expression: ZoomConstantExpression<'source'> = ((this._transitionablePaint._values['line-gradient'].value.expression) as any);
             this.stepInterpolant = expression._styleExpression && expression._styleExpression.expression instanceof Step;
             this.gradientVersion = (this.gradientVersion + 1) % Number.MAX_SAFE_INTEGER;
+        } else if (name === 'line-gradient-use-theme') {
+            // The gradient texture bakes in LUT-transformed colors; toggling
+            // use-theme changes the effective LUT and requires regeneration.
+            this.gradientVersion = (this.gradientVersion + 1) % Number.MAX_SAFE_INTEGER;
         }
     }
 

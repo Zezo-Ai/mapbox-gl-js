@@ -303,12 +303,14 @@ function drawLineTiles(painter: Painter, sourceCache: SourceCache, layer: LineSt
                         const maxTextureCoverage = lineLength * maxTilePixelSize * potentialOverzoom;
                         textureResolution = clamp(nextPowerOfTwo(maxTextureCoverage), 256, context.maxTextureSize);
                     }
+                    const ignoreLut = layer.paint.get('line-gradient-use-theme').constantOr('default') === 'none';
                     layerGradient.gradient = renderColorRamp({
                         expression: layer.gradientExpression(),
                         evaluationKey: 'lineProgress',
                         resolution: textureResolution,
                         image: layerGradient.gradient || undefined,
-                        clips: bucket.lineClipsArray
+                        clips: bucket.lineClipsArray,
+                        lut: ignoreLut ? null : layer.lut
                     });
                     if (layerGradient.texture) {
                         layerGradient.texture.update(layerGradient.gradient);
