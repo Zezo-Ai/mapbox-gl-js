@@ -855,13 +855,13 @@ a.mapboxgl-ctrl-logo.mapboxgl-compact {
 
 
 .mapboxgl-ctrl button.mapboxgl-ctrl-level-button {
-    font-weight: bold;
-    font-size: 16px;
+    font-weight: 600;
+    font-size: 14px;
     text-align: center;
 }
 
 .mapboxgl-ctrl button.mapboxgl-ctrl-level-button-selected {
-    background-color: #ccc;
+    background-color: #BCCBD7;
     color: #000;
 }
 
