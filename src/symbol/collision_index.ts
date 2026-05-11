@@ -244,7 +244,7 @@ class CollisionIndex implements CollisionDetector {
         let {x: anchorX, y: anchorY, z: anchorZ} = projection.projectTilePoint(tileUnitAnchorPoint.x, tileUnitAnchorPoint.y, tileID.canonical);
         let elevationParams: symbolProjection.ElevationParams | null = null;
         if (hasElevation) {
-            const elevationFeature = renderElevatedRoads && bucket.hdExt ? bucket.hdExt.getElevationFeatureForText(bucket, symbolIndex) : null;
+            const elevationFeature = renderElevatedRoads && bucket.hdExt ? bucket.hdExt.getElevationFeatureForPlacedSymbol(bucket, bucket.text, symbolIndex) : null;
             elevationParams = {
                 getElevation,
                 elevation,

@@ -6,6 +6,7 @@ import {tileToMeter} from '../../../src/geo/mercator_coordinate';
 
 import type {CanonicalTileID} from '../../../src/source/tile_id';
 import type SymbolBucket from '../../../src/data/bucket/symbol_bucket';
+import type {SymbolBuffers} from '../../../src/data/bucket/symbol_bucket';
 import type {ElevationFeature} from '../../elevation/elevation_feature';
 import type {SymbolOrientationArray} from '../../../src/data/array_types';
 
@@ -143,10 +144,9 @@ export class SymbolHDExtension {
         }
     }
 
-    getElevationFeatureForText(bucket: SymbolBucket, placedSymbolIdx: number): ElevationFeature | undefined {
-        const placedSymbols = bucket.text.placedSymbolArray;
-        assert(bucket.text.symbolInstanceIndices.length === placedSymbols.length);
-        const symbolInstanceIndex = bucket.text.symbolInstanceIndices[placedSymbolIdx];
+    getElevationFeatureForPlacedSymbol(bucket: SymbolBucket, buffers: SymbolBuffers, placedSymbolIdx: number): ElevationFeature | undefined {
+        assert(buffers.symbolInstanceIndices.length === buffers.placedSymbolArray.length);
+        const symbolInstanceIndex = buffers.symbolInstanceIndices[placedSymbolIdx];
         const symbolInstance = bucket.symbolInstances.get(symbolInstanceIndex);
         assert(symbolInstance);
         const elevationFeatureIndex = symbolInstance.elevationFeatureIndex;

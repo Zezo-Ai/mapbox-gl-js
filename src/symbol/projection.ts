@@ -319,7 +319,7 @@ function updateLineLabels(bucket: SymbolBucket,
         let {x, y, z} = tr.projection.projectTilePoint(tileAnchorPoint.x, tileAnchorPoint.y, tileID.canonical);
         let elevationParams: ElevationParams | null = null;
         if (hasElevation) {
-            const elevationFeature = renderElevatedRoads && bucket.hdExt ? bucket.hdExt.getElevationFeatureForText(bucket, s) : null;
+            const elevationFeature = renderElevatedRoads && bucket.hdExt ? bucket.hdExt.getElevationFeatureForPlacedSymbol(bucket, isText ? bucket.text : bucket.icon, s) : null;
             elevationParams = {
                 getElevation,
                 elevation: tr.elevation,

@@ -218,7 +218,7 @@ function updateVariableAnchorsForBucket(bucket: SymbolBucket, rotateWithMap: boo
             let dx = 0, dy = 0, dz = 0;
             const renderElevatedRoads = bucket.elevationType === 'road';
             if (elevation || renderElevatedRoads) {
-                const elevationFeature = renderElevatedRoads && bucket.hdExt ? bucket.hdExt.getElevationFeatureForText(bucket, s) : null;
+                const elevationFeature = renderElevatedRoads && bucket.hdExt ? bucket.hdExt.getElevationFeatureForPlacedSymbol(bucket, bucket.text, s) : null;
                 const h = Elevation.getAtTileOffset(coord, new Point(tileAnchorX, tileAnchorY), elevation, elevationFeature);
                 const [ux, uy, uz] = projection.upVector(coord.canonical, tileAnchorX, tileAnchorY);
                 dx = h * ux * metersToTile;
