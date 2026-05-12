@@ -12,8 +12,8 @@
 
 in ivec2 a_pos_normal;
 in uvec4 a_data;
-#if defined(ELEVATED) || defined(ELEVATED_ROADS) || defined(VARIABLE_LINE_WIDTH)
-in vec3 a_z_offset_width;
+#if defined(ELEVATED) || defined(ELEVATED_ROADS) || defined(VARIABLE_LINE_WIDTH) || defined(VARIABLE_LINE_EMISSIVE_STRENGTH)
+in vec4 a_z_offset_width;
 #endif
 #ifdef DEBUG_ELEVATION_ID
 in vec3 a_elevation_id_col;
@@ -201,6 +201,10 @@ void main() {
     #pragma mapbox: initialize lowp float border_width
     #pragma mapbox: initialize lowp vec4 border_color
     #pragma mapbox: initialize lowp float emissive_strength
+
+#ifdef VARIABLE_LINE_EMISSIVE_STRENGTH
+    emissive_strength = a_z_offset_width.w;
+#endif
 
     float a_z_offset = u_z_offset;
 #if defined(ELEVATED) || defined(ELEVATED_ROADS)

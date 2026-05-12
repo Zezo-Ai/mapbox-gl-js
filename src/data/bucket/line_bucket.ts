@@ -108,6 +108,7 @@ type LineProgressFeatures = {
     zOffset: number;
     variableWidth: number;
     elevationGroundScale: number;
+    variableEmissiveStrength: number;
 };
 
 export interface Subsegment {
@@ -130,6 +131,7 @@ class LineBucket implements Bucket {
     lineClips: LineClips | null | undefined;
     zOffsetValue: PossiblyEvaluatedValue<number>;
     variableWidthValue: PossiblyEvaluatedValue<number>;
+    variableEmissiveStrengthValue: PossiblyEvaluatedValue<number>;
     elevationGroundScaleValue: PossiblyEvaluatedValue<number>;
     lineFeature: BucketFeature;
 
@@ -500,6 +502,11 @@ class LineBucket implements Bucket {
             this.variableWidthValue = lineWidth;
         }
 
+        const lineEmissiveStrength = paint.get('line-emissive-strength').value;
+        if (lineEmissiveStrength.kind !== 'constant' && lineEmissiveStrength.isLineProgressConstant === false) {
+            this.variableEmissiveStrengthValue = lineEmissiveStrength;
+        }
+
         // Only set elevationGroundScaleValue for sea level reference lines with non-default value
         if (this.isSeaLevelReference) {
             const elevationGroundScaleExpr = layout.get('line-elevation-ground-scale').value;
@@ -526,7 +533,7 @@ class LineBucket implements Bucket {
      */
     fillNonElevatedRoadSegment(vertexOffset: number) {
         for (let i = vertexOffset; i < this.layoutVertexArray.length; i++) {
-            this.zOffsetVertexArray.emplaceBack(0, 0, 0);
+            this.zOffsetVertexArray.emplaceBack(0, 0, 0, 0);
             if (this.showElevationIdDebug) {
                 this.elevationIdColVertexArray.emplaceBack(0, 0, 0);
             }
@@ -993,7 +1000,7 @@ class LineBucket implements Bucket {
 
     evaluateLineProgressFeatures(distance: number): LineProgressFeatures | null {
         assert(distance >= 0);
-        if (!this.variableWidthValue && this.elevationType !== 'offset') {
+        if (!this.variableWidthValue && !this.variableEmissiveStrengthValue && this.elevationType !== 'offset') {
             return null;
         }
         this.evaluationGlobals.lineProgress = 0;
@@ -1007,15 +1014,19 @@ class LineBucket implements Bucket {
             variableWidth = this.variableWidthValue.evaluate(this.evaluationGlobals, this.lineFeature) || 0.0;
             variableWidth = variableWidth * 0.5;
         }
+        let variableEmissiveStrength = 0.0;
+        if (this.variableEmissiveStrengthValue && this.variableEmissiveStrengthValue.kind !== 'constant') {
+            variableEmissiveStrength = this.variableEmissiveStrengthValue.evaluate(this.evaluationGlobals, this.lineFeature) || 0.0;
+        }
         const elevationGroundScale = this.evaluateElevationGroundScale();
         if (this.elevationType !== 'offset') {
-            return {zOffset: 0.0, variableWidth, elevationGroundScale};
+            return {zOffset: 0.0, variableWidth, elevationGroundScale, variableEmissiveStrength};
         }
         if (this.zOffsetValue.kind === 'constant') {
-            return {zOffset: this.zOffsetValue.value, variableWidth, elevationGroundScale};
+            return {zOffset: this.zOffsetValue.value, variableWidth, elevationGroundScale, variableEmissiveStrength};
         }
         const zOffset: number = this.zOffsetValue.evaluate(this.evaluationGlobals, this.lineFeature) || 0.0;
-        return {zOffset, variableWidth, elevationGroundScale};
+        return {zOffset, variableWidth, elevationGroundScale, variableEmissiveStrength};
     }
 
     evaluateElevationGroundScale(): number {
@@ -1168,7 +1179,8 @@ class LineBucket implements Bucket {
             this.zOffsetVertexArray.emplaceBack(
                 lineProgressFeatures.zOffset,
                 lineProgressFeatures.variableWidth,
-                lineProgressFeatures.variableWidth
+                lineProgressFeatures.variableWidth,
+                lineProgressFeatures.variableEmissiveStrength
             );
             if (this.showElevationIdDebug) {
                 this.elevationIdColVertexArray.emplaceBack(0.0, 0.0, 0.0);

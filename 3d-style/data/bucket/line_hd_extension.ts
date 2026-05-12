@@ -80,7 +80,7 @@ export class LineHDExtension {
                     const height = sampler.pointElevation(point, tiledElevation, MARKUP_ELEVATION_BIAS);
                     this.updateHeightRange(height);
 
-                    bucket.zOffsetVertexArray.emplaceBack(height, 0.0, 0.0);
+                    bucket.zOffsetVertexArray.emplaceBack(height, 0.0, 0.0, 0.0);
                     if (col) {
                         bucket.elevationIdColVertexArray.emplaceBack(col[0], col[1], col[2]);
                     } else if (bucket.showElevationIdDebug) {

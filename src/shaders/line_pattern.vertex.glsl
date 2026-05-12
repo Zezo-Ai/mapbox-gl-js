@@ -13,7 +13,7 @@
 in ivec2 a_pos_normal;
 in uvec4 a_data;
 #if defined(ELEVATED) || defined(ELEVATED_ROADS)
-in vec3 a_z_offset_width;
+in vec4 a_z_offset_width;
 #endif
 #ifdef ELEVATION_GROUND_SCALE
 in float a_elevation_ground_scale;

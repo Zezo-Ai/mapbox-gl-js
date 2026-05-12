@@ -165,6 +165,11 @@ function drawLineTiles(painter: Painter, sourceCache: SourceCache, layer: LineSt
         definesValues.push("VARIABLE_LINE_WIDTH");
     }
 
+    const emissiveStrength = layer.paint.get('line-emissive-strength');
+    if (!image && emissiveStrength.value.kind !== 'constant' && emissiveStrength.value.isLineProgressConstant === false) {
+        definesValues.push("VARIABLE_LINE_EMISSIVE_STRENGTH");
+    }
+
     if (painter._debugParams.showElevationIdDebug) {
         definesValues.push('DEBUG_ELEVATION_ID');
     }

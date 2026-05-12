@@ -1750,7 +1750,7 @@ export {
     StructArrayLayout3ui6 as TriangleIndexArray,
     StructArrayLayout2ui4 as LineIndexArray,
     StructArrayLayout1ui2 as LineStripIndexArray,
-    StructArrayLayout3f12 as LineZOffsetExtArray,
+    StructArrayLayout4f16 as LineZOffsetExtArray,
     StructArrayLayout3f12 as LineElevationIdColArray,
     StructArrayLayout1f4 as LineElevationGroundScaleArray,
     StructArrayLayout3f12 as SkyboxVertexArray,
