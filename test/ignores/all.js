@@ -275,6 +275,7 @@ const skip = [
 
     // Requires support for hd-roads-markup/elevationId - not yet supported in gl-js
     "render-tests/model-layer/model-elevation-reference/hd-road-markup/with-elevation-id",
+    "render-tests/model-layer/model-elevation-reference/hd-road-markup/with-terrain-fallback-to-ground",
     "render-tests/building/terrain/terrain-toggle-conflation-works",
     "render-tests/building/terrain/terrain-unsupported",
     "render-tests/building/globe-unsupported",
