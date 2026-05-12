@@ -59,6 +59,10 @@ const fogMatrixScratch = new Float64Array(16);
 const instancedNormalMatrixPlaceholder = new Float32Array(16);
 const lodNodeCenterScratch: vec3 = [0, 0, 0];
 
+// Below this lightmap intensity the contribution is negligible, so we skip the
+// USE_LIGHTMAP shader path entirely instead of branching on the uniform at runtime.
+const LIGHTMAP_INTENSITY_THRESHOLD = 0.001;
+
 type ModelParameters = {
     zScaleMatrix: mat4;
     negCameraPosMatrix: mat4;
@@ -1347,6 +1351,10 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                             programOptions.defines.push('DIFFUSE_SHADED');
                         }
 
+                        if (layer.paint.get('model-lightmap-intensity') > LIGHTMAP_INTENSITY_THRESHOLD) {
+                            programOptions.defines.push('USE_LIGHTMAP');
+                        }
+
                         if (singleCascade) {
                             programOptions.defines.push('SHADOWS_SINGLE_CASCADE');
                         }
@@ -1425,8 +1433,10 @@ function drawBatchedModels(painter: Painter, source: SourceCache, layer: ModelSt
                                 threshold
                         );
 
-                        if (!isLight && (nodeInfo.hasTranslucentParts || sortedNode.opacity < 1.0)) {
-
+                        // z-prepass is needed for landmark cutoff. Skipped for translucent parts —
+                        // otherwise depth-write here breaks USE_LIGHTMAP in the color pass.
+                        // Should check per-mesh, not per-node, to keep the prepass for opaque meshes of mixed nodes.
+                        if (!isLight && sortedNode.opacity < 1.0 && !nodeInfo.hasTranslucentParts) {
                             program.draw(painter, context.gl.TRIANGLES, depthModeRW, StencilMode.disabled, ColorMode.disabled, CullFaceMode.backCCW,
                                 uniformValues, layer.id, mesh.vertexBuffer, mesh.indexBuffer, mesh.segments, layer.paint, painter.transform.zoom,
                                 // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
