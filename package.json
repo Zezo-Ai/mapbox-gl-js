@@ -212,9 +212,8 @@
       "gzip": true,
       "name": "ESM Core",
       "path": [
-        "dist/esm/core.js",
-        "dist/esm/worker.js",
-        "dist/esm/shared.js",
+        "dist/esm/core*.js",
+        "dist/esm/worker*.js",
         "dist/esm/shared*.js"
       ]
     },
