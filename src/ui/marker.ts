@@ -107,6 +107,8 @@ export default class Marker extends Evented<MarkerEvents> {
     _updateMoving: () => void;
     _occludedOpacity: number;
     _altitude: number;
+    _svgElement: Element;
+    _shadowElement: Element;
 
     constructor(options?: MarkerOptions, legacyOptions?: MarkerOptions) {
         super();
@@ -174,11 +176,9 @@ export default class Marker extends Evented<MarkerEvents> {
         if (!this._element.hasAttribute('aria-label')) {
             this._element.setAttribute('aria-label', 'Map marker');
         }
-
         if (!this._element.hasAttribute('role')) {
             this._element.setAttribute('role', 'img');
         }
-
         this._element.classList.add('mapboxgl-marker');
         this._element.addEventListener('dragstart', (e: DragEvent) => {
             e.preventDefault();
@@ -192,8 +192,9 @@ export default class Marker extends Evented<MarkerEvents> {
             classList.remove(`mapboxgl-marker-anchor-${key}`);
         }
         classList.add(`mapboxgl-marker-anchor-${this._anchor}`);
-        const classNames = options && options.className ? options.className.trim().split(WHITESPACE_RE) : [];
-        classList.add(...classNames);
+        if (options && options.className) {
+            classList.add(...options.className.trim().split(WHITESPACE_RE));
+        }
 
         this._popup = null;
     }
@@ -214,12 +215,18 @@ export default class Marker extends Evented<MarkerEvents> {
             width: `${DEFAULT_WIDTH * this._scale}px`,
             viewBox: `0 0 ${DEFAULT_WIDTH} ${DEFAULT_HEIGHT}`
         }, element);
+        this._svgElement = svg;
 
+        // Shadow gradient defs live permanently — they are invisible and zero-cost.
+        const gradient = DOM.createSVG('radialGradient', {id: 'shadowGradient'}, DOM.createSVG('defs', {}, svg));
+        DOM.createSVG('stop', {offset: '10%', 'stop-opacity': 0.4}, gradient);
+        DOM.createSVG('stop', {offset: '100%', 'stop-opacity': 0.05}, gradient);
+
+        // The shadow ellipse is the only painted shadow element; toggled by setAltitude.
+        const shadowEllipse = DOM.createSVG('ellipse', {cx: 13.5, cy: 34.8, rx: 10.5, ry: 5.25, fill: 'url(#shadowGradient)'});
+        this._shadowElement = shadowEllipse;
         if (this._altitude === 0) {
-            const gradient = DOM.createSVG('radialGradient', {id: 'shadowGradient'}, DOM.createSVG('defs', {}, svg));
-            DOM.createSVG('stop', {offset: '10%', 'stop-opacity': 0.4}, gradient);
-            DOM.createSVG('stop', {offset: '100%', 'stop-opacity': 0.05}, gradient);
-            DOM.createSVG('ellipse', {cx: 13.5, cy: 34.8, rx: 10.5, ry: 5.25, fill: 'url(#shadowGradient)'}, svg); // shadow
+            svg.insertBefore(shadowEllipse, svg.firstChild);
         }
 
         DOM.createSVG('path', { // marker shape
@@ -350,12 +357,20 @@ export default class Marker extends Evented<MarkerEvents> {
     setAltitude(altitude: number): this {
         if (altitude === this._altitude) return this;
 
-        // recreate marker if the altitude is changing from 0 to non-zero or vice versa
-        if (this._defaultMarker && ((this._altitude === 0 && altitude !== 0) || (this._altitude !== 0 && altitude === 0))) {
-            this._element = this._createDefaultMarker();
+        const previousAltitude = this._altitude;
+        this._altitude = altitude || defaultOptions.altitude;
+
+        // toggle shadow ellipse when altitude crosses zero in either direction
+        // (the ground shadow is only visible at altitude 0)
+        const crossesZero = (previousAltitude === 0) !== (this._altitude === 0);
+        if (this._defaultMarker && crossesZero) {
+            if (this._altitude === 0) {
+                this._svgElement.insertBefore(this._shadowElement, this._svgElement.firstChild);
+            } else {
+                this._shadowElement.remove();
+            }
         }
 
-        this._altitude = altitude || defaultOptions.altitude;
         this._update();
         return this;
     }
