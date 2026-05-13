@@ -4,10 +4,9 @@ import {
     parseElevationFeatures,
     attachExtension,
     postprocessTile,
-    parseActiveFloors,
 } from './hd_worker_imports';
 
-export {BuildingBucket, parseElevationFeatures, attachExtension, postprocessTile, parseActiveFloors};
+export {BuildingBucket, parseElevationFeatures, attachExtension, postprocessTile};
 
 // Live in UMD builds: HD is always loaded because all symbols are resolved
 // synchronously at bundle load time. ESM exposes the same shape but lazily.

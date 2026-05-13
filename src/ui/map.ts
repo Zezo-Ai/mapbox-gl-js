@@ -4194,15 +4194,15 @@ export class Map extends Camera {
      * map._selectIndoorFloor('floor-1');
      */
     _selectIndoorFloor(floorId: string) {
-        if (this.style.indoorManager) this.style.indoorManager.selectFloor(floorId);
+        this.style.indoorManager.selectFloor(floorId);
     }
 
     _setIndoorActiveFloorsVisibility(activeFloorsVisible: boolean) {
-        if (this.style.indoorManager) this.style.indoorManager.setActiveFloorsVisibility(activeFloorsVisible);
+        this.style.indoorManager.setActiveFloorsVisibility(activeFloorsVisible);
     }
 
     getIndoorTileOptions(source: string, scope: string): IndoorTileOptions | null {
-        if (!this.style || !this.style.isIndoorEnabled() || !this.style.indoorManager) {
+        if (!this.style || !this.style.isIndoorEnabled()) {
             return null;
         }
         return this.style.indoorManager.getIndoorTileOptions(source, scope);

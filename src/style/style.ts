@@ -22,7 +22,7 @@ import Lights from '../../3d-style/style/lights';
 import {getProperties as getAmbientProps} from '../../3d-style/style/ambient_light_properties';
 import {getProperties as getDirectionalProps} from '../../3d-style/style/directional_light_properties';
 import {createExpression} from '../style-spec/expression/index';
-import {HD, prepareHD as prepareHDMain} from '../../modules/hd_main';
+import {prepareHD as prepareHDMain} from '../../modules/hd_main';
 import {
     validateStyle,
     validateLayoutProperty,
@@ -70,9 +70,9 @@ import {TargetFeature} from '../util/vectortile_to_geojson';
 import {loadIconset} from './load_iconset';
 import {ImageId} from '../style-spec/expression/types/image_id';
 import {ImageProvider} from '../render/image_provider';
+import IndoorManager from './indoor_manager';
 import {StyleBOMUtils} from './style_bom_utils';
 
-import type IndoorManager from '../../3d-style/style/indoor_manager';
 import type {FontstackCompositing} from './glyph_loader';
 import type {PropertyValidatorOptions} from '../style-spec/validate/validate_property';
 import type {StylePropertySpecification} from '../style-spec/style-spec';
@@ -302,7 +302,7 @@ class Style extends Evented<MapEvents> {
     imageManager: ImageManager;
     glyphManager: GlyphManager;
     modelManager: ModelManager;
-    indoorManager: IndoorManager | null;
+    indoorManager: IndoorManager;
     ambientLight: Lights<Ambient> | null | undefined;
     directionalLight: Lights<Directional> | null | undefined;
     light: Light;
@@ -444,7 +444,7 @@ class Style extends Evented<MapEvents> {
 
         this._hasDataDrivenEmissive = false;
 
-        this.indoorManager = null;
+        this.indoorManager = new IndoorManager(this);
 
         if (options.dispatcher) {
             this.dispatcher = options.dispatcher;
@@ -1229,7 +1229,6 @@ class Style extends Evented<MapEvents> {
     }
 
     mergeIndoor() {
-        this._mergedIndoor = {};
         this.forEachFragmentStyle((style: Style) => {
             if (style.stylesheet && style.stylesheet.indoor) {
                 for (const indoor of Object.values(style.stylesheet.indoor)) {
@@ -1239,30 +1238,6 @@ class Style extends Evented<MapEvents> {
                 }
             }
         });
-
-        if (Object.keys(this._mergedIndoor).length > 0) {
-            // Preload HD on both threads so IndoorManager is ready before any tile arrives.
-            // The .then() defers _initIndoorManager until after the dynamic import resolves
-            // in ESM builds; in UMD prepareHDMain() returns a resolved promise so this is
-            // effectively synchronous. prepareHDWorker() is also called so bucket transfers
-            // from worker to main work correctly.
-            void prepareHDMain().then(() => { this._initIndoorManager(); });
-        }
-    }
-
-    _initIndoorManager(): void {
-        if (this.indoorManager || !HD.IndoorManager || !this.isRootStyle() || Object.keys(this._mergedIndoor).length === 0) {
-            return;
-        }
-        this.indoorManager = new HD.IndoorManager(this, this._loaded);
-        // If the style had already finished loading before the HD module resolved,
-        // reload indoor sources so they are re-parse on the worker with the now-available IndoorManager.
-        if (this._loaded) {
-            for (const fqid of Object.keys(this._mergedIndoor)) {
-                const sourceCache = this._mergedSourceCaches[fqid] || this._mergedOtherSourceCaches[fqid];
-                if (sourceCache) sourceCache.reload();
-            }
-        }
     }
 
     mergeLayers() {
@@ -2609,7 +2584,7 @@ class Style extends Evented<MapEvents> {
     }
 
     setIndoorData(mapId: string, params: ActorMessages['setIndoorData']['params']) {
-        if (this.indoorManager) this.indoorManager.setIndoorData(params);
+        this.indoorManager.setIndoorData(params);
     }
 
     updateIndoorDependentLayers() {
@@ -4160,7 +4135,7 @@ class Style extends Evented<MapEvents> {
         delete this.terrain;
         delete this.ambientLight;
         delete this.directionalLight;
-        if (this.indoorManager) this.indoorManager.destroy();
+        this.indoorManager.destroy();
 
         // Shared managers should be removed only on removing the root style
         if (this.isRootStyle()) {
