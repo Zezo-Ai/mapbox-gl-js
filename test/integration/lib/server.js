@@ -1,3 +1,4 @@
+// eslint-disable-next-line e18e/ban-dependencies
 import express from 'express';
 import localizeURLs from './localize-urls.js';
 import {injectMiddlewares} from './middlewares.js';

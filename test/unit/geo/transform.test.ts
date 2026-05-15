@@ -1269,7 +1269,7 @@ describe('transform', () => {
 
             const coverLowSide = transform.coveringTiles(options);
 
-            expect(coverLowSide.filter(t => lowTiles.includes(t.key)).length === 0).toBeTruthy();
+            expect(!coverLowSide.some(t => lowTiles.includes(t.key))).toBeTruthy();
 
             tileElevation[lowTiles[0]] = null; // missing elevation information gets to cover.
 
