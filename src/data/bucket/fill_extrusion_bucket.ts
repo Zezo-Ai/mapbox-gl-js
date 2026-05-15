@@ -12,6 +12,7 @@ import SegmentVector from '../segment';
 import {ProgramConfigurationSet} from '../program_configuration';
 import {TriangleIndexArray} from '../index_array_type';
 import EXTENT from '../../style-spec/data/extent';
+import {lerp} from '../../style-spec/util/lerp';
 import earcut from 'earcut';
 import {VectorTileFeature} from '@mapbox/vector-tile';
 const vectorTileFeatureTypes = VectorTileFeature.types;
@@ -1711,7 +1712,7 @@ class FillExtrusionBucket implements BucketWithGroundEffect {
         const tileMax = [((id.canonical.x + 1) / tiles) + id.wrap, ((id.canonical.y + 1) / tiles)];
 
         const mix = (a: Array<number>, b: Array<number>, c: Array<number>): Array<number> => {
-            return [(a[0] * (1 - c[0])) + (b[0] * c[0]), (a[1] * (1 - c[1])) + (b[1] * c[1])];
+            return [lerp(a[0], b[0], c[0]), lerp(a[1], b[1], c[1])];
         };
         const fracMin = [];
         const fracMax = [];

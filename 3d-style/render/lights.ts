@@ -1,5 +1,6 @@
 import {Uniform3f} from '../../src/render/uniform_binding';
 import {sRGBToLinearAndScale, linearVec3TosRGB, clamp} from '../../src/util/util';
+import {lerp} from '../../src/style-spec/util/lerp';
 import {vec3} from 'gl-matrix';
 
 import type Context from '../../src/gl/context';
@@ -32,8 +33,6 @@ function calculateAmbientDirectionalFactor(dir: vec3, normal: vec3, dirColor: ve
     const factorReductionMax = 0.3;
     const dirLuminance = vec3.dot(dirColor, [0.2126, 0.7152, 0.0722]);
     const directionalFactorMin = 1.0 - factorReductionMax * Math.min(dirLuminance, 1.0);
-
-    const lerp = (a: number, b: number, t: number) => { return (1 - t) * a + t * b; };
 
     // If dirColor is (1, 1, 1), then the return value range is
     // NdotL=-1: 1.0 - factorReductionMax

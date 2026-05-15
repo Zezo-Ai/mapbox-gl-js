@@ -26,6 +26,7 @@ import {PosArray, TriangleIndexArray} from '../../src/data/array_types';
 import posAttributes from '../../src/data/pos_attributes';
 import {debugUniformValues} from '../../src/render/program/debug_program';
 import Color from '../../src/style-spec/util/color';
+import {lerp} from '../../src/style-spec/util/lerp';
 
 import type Program from '../../src/render/program';
 import type Transform from '../../src/geo/transform';
@@ -1568,7 +1569,6 @@ function calculateFrontCutoffOpacity(tileModelMatrix: mat4, tr: Transform, aabb:
     }
 
     const cutoffFactor = (-Math.abs(yMinLimit) - cutoffStart[1]) / cutoffRangeParam;
-    const lerp = (a: number, b: number, t: number) => { return (1 - t) * a + t * b; };
     const opacity = clamp(lerp(1.0, finalOpacity, cutoffFactor), finalOpacity, 1.0);
 
     return lerp(1.0, opacity, clamp((tr.pitch - fullyOpaquePitch) / (fullyTransparentPitch - fullyOpaquePitch), 0.0, 1.0));

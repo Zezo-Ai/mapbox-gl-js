@@ -11,7 +11,7 @@ export type BBox = [number, number, number, number];
  * have a clockwise winding.  Negative areas are interior rings and have a counter clockwise
  * ordering.
  */
-function calculateSignedArea(ring: Ring): number {
+export function calculateSignedArea(ring: Ring): number {
     let sum = 0;
     for (let i = 0, len = ring.length, j = len - 1, p1: Point, p2: Point; i < len; j = i++) {
         p1 = ring[i];

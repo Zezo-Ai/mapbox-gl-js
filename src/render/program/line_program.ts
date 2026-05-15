@@ -1,6 +1,7 @@
 import {Uniform1i, Uniform1f, Uniform2f, Uniform3f, Uniform4f, UniformMatrix2f, UniformMatrix4f} from '../uniform_binding';
 import pixelsToTileUnits from '../../source/pixels_to_tile_units';
 import {clamp} from '../../../src/util/util';
+import {lerp} from '../../../src/style-spec/util/lerp';
 import {tileToMeter} from '../../../src/geo/mercator_coordinate';
 
 import type {mat4} from 'gl-matrix';
@@ -98,8 +99,6 @@ const linePatternUniforms = (context: Context): LinePatternUniformsType => ({
     'u_ground_shadow_factor': new Uniform3f(context),
     'u_pattern_transition': new Uniform1f(context),
 });
-
-const lerp = (a: number, b: number, t: number) => { return (1 - t) * a + t * b; };
 
 const lineUniformValues = (
     painter: Painter,

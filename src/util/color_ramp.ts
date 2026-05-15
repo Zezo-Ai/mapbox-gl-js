@@ -1,5 +1,6 @@
 import {RGBAImage} from './image';
 import {isPowerOfTwo} from './util';
+import {lerp} from '../style-spec/util/lerp';
 import assert from 'assert';
 
 import type {StylePropertyExpression, GlobalProperties} from '../style-spec/expression/index';
@@ -54,7 +55,7 @@ export function renderColorRamp(params: ColorRampParams): RGBAImage {
                 // Remap progress between clips
                 const progress = i / (width - 1);
                 const {start, end} = params.clips[clip];
-                const evaluationProgress = start * (1 - progress) + end * progress;
+                const evaluationProgress = lerp(start, end, progress);
                 renderPixel(stride, j, evaluationProgress);
             }
         }

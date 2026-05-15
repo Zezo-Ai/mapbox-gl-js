@@ -10,14 +10,13 @@ import {
 import {computeRasterColorMix, computeRasterColorOffset} from '../raster';
 import {COLOR_RAMP_RES} from '../../style/style_layer/raster_style_layer';
 import {contrastFactor, saturationFactor, clamp} from '../../util/util';
+import {lerp} from '../../style-spec/util/lerp';
 
 import type {mat3, mat4} from 'gl-matrix';
 import type Painter from '../painter';
 import type Context from '../../gl/context';
 import type {UniformValues} from '../uniform_binding';
 import type RasterStyleLayer from '../../style/style_layer/raster_style_layer';
-
-const lerp = (a: number, b: number, t: number) => { return (1 - t) * a + t * b; };
 
 function computeZBiasFactor(painter: Painter) {
     const terrainExaggeration =  painter.terrain ? painter.terrain.exaggeration() : 1.0;

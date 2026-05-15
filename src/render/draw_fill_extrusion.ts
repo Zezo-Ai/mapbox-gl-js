@@ -22,6 +22,7 @@ import assert from 'assert';
 import {mercatorXfromLng, mercatorYfromLat, getMetersPerPixelAtLatitude} from '../geo/mercator_coordinate';
 import {globeToMercatorTransition} from '../geo/projection/globe_util';
 import Color from '../style-spec/util/color';
+import {lerp} from '../style-spec/util/lerp';
 import {calculateGroundShadowFactor} from '../../3d-style/render/shadow_renderer';
 import {RGBAImage} from '../util/image';
 import Texture from './texture';
@@ -162,8 +163,6 @@ function draw(painter: Painter, source: SourceCache, layer: FillExtrusionStyleLa
             const aoEnabled = aoIntensity > 0 && aoRadius > 0;
 
             const floodLightEnabled = floodLightIntensity > 0;
-
-            const lerp = (a: number, b: number, t: number) => { return (1 - t) * a + t * b; };
 
             const groundEffectProps = new GroundEffectProperties();
             groundEffectProps.translate = layer.paint.get('fill-extrusion-translate');

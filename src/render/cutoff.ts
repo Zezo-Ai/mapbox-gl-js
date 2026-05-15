@@ -1,5 +1,6 @@
 import {Uniform4f} from './uniform_binding';
 import {smoothstep, warnOnce} from '../util/util';
+import {lerp} from '../style-spec/util/lerp';
 import {MIN_LOD_PITCH} from '../geo/transform';
 
 import type {UniformValues} from './uniform_binding';
@@ -61,7 +62,6 @@ export const getCutoffParams = (painter: Painter, cutoffFadeRange: number): Cuto
         };
     }
 
-    const lerp = (a: number, b: number, t: number) => { return (1 - t) * a + t * b; };
     const tr = painter.transform;
     const pitch = tr.pitch;
 

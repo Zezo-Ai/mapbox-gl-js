@@ -1,6 +1,7 @@
 import {isValue} from '../values';
 import {NumberType} from '../types';
 import {classifyRings, updateBBox, boxWithinBox, pointWithinPolygon, segmentIntersectSegment} from '../../util/geometry_util';
+import {lngFromMercatorX, latFromMercatorY} from '../../util/mercator';
 import CheapRuler from "cheap-ruler";
 import TinyQueue from "tinyqueue";
 import EXTENT from '../../data/extent';
@@ -124,15 +125,6 @@ function bboxToBBoxDistance(bbox1: BBox, bbox2: BBox, ruler: CheapRuler) {
         dy = bbox2[1] - bbox1[3];
     }
     return ruler.distance([0.0, 0.0], [dx, dy]);
-}
-
-function lngFromMercatorX(x: number): number {
-    return x * 360 - 180;
-}
-
-function latFromMercatorY(y: number): number {
-    const y2 = 180 - y * 360;
-    return 360 / Math.PI * Math.atan(Math.exp(y2 * Math.PI / 180)) - 90;
 }
 
 export function getLngLatPoint(coord: Point, canonical: CanonicalTileID, extent: number = EXTENT): [number, number] {

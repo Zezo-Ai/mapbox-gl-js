@@ -9,6 +9,7 @@ import {getMetersPerPixelAtLatitude} from '../../src/geo/mercator_coordinate';
 import {Debug} from '../../src/util/debug';
 import {drawGroundEffect as fillExtrusionDrawGroundEffect, GroundEffectProperties, frustumCullShadowCaster, computeFrontCutoffParams} from '../../src/render/draw_fill_extrusion';
 import Color from '../../src/style-spec/util/color';
+import {lerp} from '../../src/style-spec/util/lerp';
 import ColorMode from '../../src/gl/color_mode';
 import {PerformanceUtils} from '../../src/util/performance';
 
@@ -204,8 +205,6 @@ function drawTiles(params: DrawParams) {
 }
 
 function drawGroundEffect(painter: Painter, source: SourceCache, layer: BuildingStyleLayer, coords: Array<OverscaledTileID>, aoPass: boolean, opacity: number, aoIntensity: number, aoRadius: number, floodLightIntensity: number, floodLightColor: [number, number, number], attenuationFactor: number, replacementActive: boolean, renderNeighbors: boolean, frontCutoffParams?: [number, number, number]) {
-    const lerp = (a: number, b: number, t: number) => { return (1 - t) * a + t * b; };
-
     const gl = painter.context.gl;
     const depthMode = painter.depthModeForSublayer(1, DepthMode.ReadOnly, gl.LEQUAL, true);
 

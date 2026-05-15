@@ -530,24 +530,7 @@ export function isCounterClockwise(a: Point, b: Point, c: Point): boolean {
     return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
 }
 
-/**
- * Returns the signed area for the polygon ring.  Postive areas are exterior rings and
- * have a clockwise winding.  Negative areas are interior rings and have a counter clockwise
- * ordering.
- *
- * @private
- * @param ring Exterior or interior ring
- */
-export function calculateSignedArea(ring: Array<Point>): number {
-    let sum = 0;
-    for (let i = 0, len = ring.length, j = len - 1, p1, p2; i < len; j = i++) {
-        p1 = ring[i];
-        p2 = ring[j];
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        sum += (p2.x - p1.x) * (p1.y + p2.y);
-    }
-    return sum;
-}
+export {calculateSignedArea} from '../style-spec/util/geometry_util';
 
 export type Position = {
     x: number;

@@ -1,3 +1,5 @@
-export function number(a: number, b: number, t: number): number {
+export function lerp(a: number, b: number, t: number): number {
     return (a * (1 - t)) + (b * t);
 }
+
+export {lerp as number};

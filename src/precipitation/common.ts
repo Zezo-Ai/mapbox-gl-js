@@ -1,5 +1,6 @@
 import {earthRadius} from '../geo/lng_lat.js';
 import {degToRad, clamp} from '../util/util.js';
+import {lerp} from '../style-spec/util/lerp';
 import {mulberry32} from '../style-spec/util/random';
 import {vec3, quat, mat4} from 'gl-matrix';
 import {Vignette} from './vignette';
@@ -94,7 +95,7 @@ export function generateUniformDistributedPointsInsideCube(pointsCount: number):
 
 export function lerpClamp(a: number, b: number, t1: number, t2: number, tMid: number) {
     const t = clamp((tMid - t1) / (t2 - t1), 0, 1);
-    return (1 - t) * a + t * b;
+    return lerp(a, b, t);
 }
 
 class DrawParams {
