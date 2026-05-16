@@ -42,6 +42,13 @@ export default function validateImport(options: ImportValidatorOptions): Validat
         errors.push(new ValidationError(key, importSpec, `import id can't be an empty string`));
     }
 
+    // Reject reserved prototype-pollution key — the import id is used as a scope
+    // string that becomes a dictionary key in several runtime caches.
+    if (unbundle(importSpec.id) === '__proto__') {
+        const key = `${options.key}.id`;
+        errors.push(new ValidationError(key, importSpec, `import id can't be "__proto__"`));
+    }
+
     if (data) {
         const key = `${options.key}.data`;
         errors = errors.concat(validateStyle(data, styleSpec, {key}));

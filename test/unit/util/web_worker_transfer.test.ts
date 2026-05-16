@@ -89,3 +89,17 @@ test('custom serialization', () => {
     expect(bar2.id).toEqual(bar.id);
     expect(bar2._deserialized).toBeTruthy();
 });
+
+test('serialize null-prototype object (e.g. Object.create(null) dictionaries)', () => {
+    // ModelManager and the style-spec prototype-pollution fixes store data in
+    // Object.create(null) dictionaries. When those flow into worker broadcasts
+    // (Style#_updateWorkerModels, etc.), the serializer must not crash trying
+    // to read `input.constructor._classRegistryKey` on a null-proto object.
+    const dict = Object.create(null) as Record<string, unknown>;
+    dict['foo'] = 'https://example.com/model.gltf';
+    dict['bar'] = 42;
+
+    const deserialized = deserialize(serialize(dict)) as Record<string, unknown>;
+    expect(deserialized.foo).toEqual('https://example.com/model.gltf');
+    expect(deserialized.bar).toEqual(42);
+});

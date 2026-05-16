@@ -111,7 +111,7 @@ function parseTokens(s: string, tokens: number[]) {
             while (tokens[i] !== RBRACE) {
                 const key: string = JSON.parse(s.slice(tokens[i + 1], tokens[i + 2])) as string;
                 i += 3;
-                obj[key] = parseValue();
+                Object.defineProperty(obj, key, {value: parseValue(), enumerable: true, configurable: true, writable: true});
             }
             i += 3;
             return obj;

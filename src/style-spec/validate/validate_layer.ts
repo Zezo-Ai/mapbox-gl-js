@@ -77,7 +77,10 @@ export default function validateLayer(options: LayerValidatorOptions): Validatio
         } else if (!isString(layer.source)) {
             errors.push(new ValidationError(`${key}.source`, layer.source, '"source" must be a string'));
         } else {
-            const source = style.sources && style.sources[layer.source];
+            // Object.hasOwn: a bare lookup like `style.sources[layer.source]` would
+            // find inherited keys from Object.prototype (e.g. "constructor", "toString")
+            // and treat them as valid sources.
+            const source = style.sources && Object.hasOwn(style.sources, layer.source) ? style.sources[layer.source] : undefined;
             const sourceType = source && unbundle(source.type);
             if (!source) {
                 errors.push(new ValidationError(key, layer.source, `source "${layer.source}" not found`));

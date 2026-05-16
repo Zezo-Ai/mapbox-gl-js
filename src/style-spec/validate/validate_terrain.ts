@@ -74,7 +74,7 @@ export default function validateTerrain(options: TerrainValidatorOptions): Valid
     } else if (!isString(terrain.source)) {
         errors.push(new ValidationError(`${key}.source`, terrain.source, `source must be a string`));
     } else {
-        const source = style.sources && style.sources[terrain.source];
+        const source = style.sources && Object.hasOwn(style.sources, terrain.source) ? style.sources[terrain.source] : undefined;
         const sourceType = source && unbundle(source.type) as string;
         if (!source) {
             errors.push(new ValidationError(`${key}.source`, terrain.source, `source "${terrain.source}" not found`));

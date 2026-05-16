@@ -182,7 +182,10 @@ export function serialize(input: unknown, transferables?: Set<Transferable> | nu
         return input as Serialized;
     }
 
-    const klass = input.constructor as Klass;
+    // Null-prototype objects (e.g. Object.create(null)) have no inherited
+    // `constructor`, so fall back to the plain-Object codepath. They serialize
+    // as plain dicts and round-trip as regular {} on the worker side.
+    const klass = (input.constructor || Object) as Klass;
     const name = klass._classRegistryKey;
     if (!name) {
         throw new Error(`Can't serialize object of unregistered class "${klass.name}".`);
